@@ -1,0 +1,7 @@
+*~
+*.o
+tmp*
+a.out
+tinycc
+*.xcodeproj
+*.s
