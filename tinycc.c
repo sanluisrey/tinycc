@@ -25,9 +25,17 @@ struct Token {
 //現在着目しているトークン
 Token *token;
 
-// エラーを報告するための関数
-// printfと同じ引数を取る
-void error(char *fmt, ...) {
+//入力プログラム
+char *user_input;
+// エラーを報告する
+void error_at(char *loc, char *fmt, ...) {
+    fprintf(stderr, user_input);
+    fprintf(stderr, "\n");
+    int num = loc - user_input;
+    while (num--) {
+        fprintf(stderr, " ");
+    }
+    fprintf(stderr, "^ ");
     va_list ap;
     va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
@@ -49,7 +57,7 @@ bool consume(char op){
 // それ以外の場合にはエラーを報告する。
 void expect(char op){
     if (token->kind != TK_RESERVED || token->str[0] != op) {
-        error("'%c'ではありません", op);
+        error_at(token->str,"'%c'ではありません", op);
     }
     token = token->next;
 }
@@ -58,7 +66,7 @@ void expect(char op){
 // それ以外の場合にはエラーを報告する。
 int expect_number(){
     if (token->kind != TK_NUM) {
-        error("数ではありません");
+        error_at(token->str,"数ではありません");
     }
     int val = token->val;
     token = token->next;
@@ -80,9 +88,9 @@ Token *new_token(TokenKind kind, Token *cur, char *str){
 
 //入力文字列pをトークナイズしてそれを返す
 Token *tokenize(char *p){
-    Token *head = calloc(1, sizeof(Token));
-    Token *cur;
-    cur = head;
+    Token head;
+    head.next = NULL;
+    Token *cur = &head;
     int val;
     while (*p) {
         if (*p == '\t' || *p == ' ') {
@@ -95,25 +103,15 @@ Token *tokenize(char *p){
             continue;
         }
         if (isdigit(*p)) {
-            val = *p - '0';
-            p++;
-            while (isdigit(*p)) {
-                val *= 10;
-                val += *p - '0';
-                p++;
-            }
-            Token *tok = calloc(1, sizeof(Token));
-            tok->kind = TK_NUM;
-            tok->val = val;
-            cur->next = tok;
-            cur = tok;
+            cur = new_token(TK_NUM, cur, p);
+            val = strtol(p, &p, 10);
+            cur->val = val;
+            continue;
         }
-        error("トークナイズできません");
+        error_at(p, "トークナイズできません");
     }
-    Token *tok = calloc(1, sizeof(Token));
-    tok->kind = TK_EOF;
-    cur->next = tok;
-    return head->next;
+    new_token(TK_EOF, cur, p);
+    return head.next;
 }
 
 int main(int argc, char **argv){
@@ -123,6 +121,7 @@ int main(int argc, char **argv){
     }
     
     //トークナイズする
+    user_input = argv[1];
     token = tokenize(argv[1]);
     
     //アセンブリの前半部分の出力
