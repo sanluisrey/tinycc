@@ -25,16 +25,39 @@ struct Token {
 //現在着目しているトークン
 Token *token;
 
+//抽象構文木のノードの種類
+typedef enum {
+    ND_ADD, // +
+    ND_SUB, // -
+    ND_MUL, // *
+    ND_DIV, // /
+    ND_NUM, // 整数
+} NodeKind;
+
+typedef struct Node Node;
+
+// 抽象構文木のノードの型
+struct Node {
+    NodeKind kind;  // ノードの型
+    Node *left;     // 左辺
+    Node *right;    // 右辺
+    int val;        // kindがND_NUMのときのみ扱う
+};
+
+Node *expr();
+Node *mul();
+Node *primary();
+
+//抽象構文木のルート
+Node *root;
+
 //入力プログラム
 char *user_input;
 // エラーを報告する
 void error_at(char *loc, char *fmt, ...) {
-    fprintf(stderr, user_input);
-    fprintf(stderr, "\n");
+    fprintf(stderr,"%s\n", user_input);
     int num = loc - user_input;
-    while (num--) {
-        fprintf(stderr, " ");
-    }
+    fprintf(stderr,"%*s",num,  " ");
     fprintf(stderr, "^ ");
     va_list ap;
     va_start(ap, fmt);
@@ -97,7 +120,7 @@ Token *tokenize(char *p){
             p++;
             continue;
         }
-        if (*p == '+' || *p == '-') {
+        if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')') {
             cur = new_token(TK_RESERVED, cur, p);
             p++;
             continue;
@@ -114,35 +137,111 @@ Token *tokenize(char *p){
     return head.next;
 }
 
+Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = kind;
+    ret->left = lhs;
+    ret->right = rhs;
+    return ret;
+}
+
+Node *new_node_num(int val){
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_NUM;
+    ret->val = val;
+    return ret;
+}
+
+Node *expr() {
+    Node *left = mul();
+    Node *ret = left;
+    for (; ; ) {
+        if (consume('+')) {
+            Node *right = mul();
+            ret = new_node(ND_ADD, ret, right);
+        } else if (consume('-')){
+            Node *right = mul();
+            ret = new_node(ND_SUB, ret, right);
+        } else {
+            return ret;
+        }
+    }
+}
+
+Node *mul() {
+    Node *left = primary();
+    Node *ret = left;
+    for (; ;) {
+        if (consume('*')) {
+            Node *right = primary();
+            ret = new_node(ND_MUL, ret, right);
+        } else if (consume('/')){
+            Node *right = primary();
+            ret = new_node(ND_DIV, ret, right);
+        } else {
+            return ret;
+        }
+    }
+}
+
+Node *primary() {
+    if (consume('(')) {
+        Node *ret = expr();
+        expect(')');
+        return ret;
+    }
+    return new_node_num(expect_number());
+}
+
+void gen(Node *node){
+    if (node->kind == ND_NUM) {
+        printf("    push %d\n", node->val);
+        return;
+    }
+    gen(node->left);
+    gen(node->right);
+    printf("    pop rdi\n");
+    printf("    pop rax\n");
+    switch (node->kind) {
+        case ND_ADD:
+            printf("    add rax, rdi\n");
+            break;
+        case ND_SUB:
+            printf("    sub rax, rdi\n");
+            break;
+        case ND_MUL:
+            printf("    imul rax, rdi\n");
+            break;
+        case ND_DIV:
+            printf("    cqo\n");
+            printf("    idiv rdi\n");
+            break;
+    }
+    printf("    push rax\n");
+}
+
 int main(int argc, char **argv){
     if (argc != 2) {
         fprintf(stderr, "引数の個数が正しくありません\n");
         return 1;
     }
     
-    //トークナイズする
+    // トークナイズする
     user_input = argv[1];
     token = tokenize(argv[1]);
     
-    //アセンブリの前半部分の出力
+    // 抽象構文木の作成
+    root = expr();
+    
+    // アセンブリの前半部分の出力
     printf(".intel_syntax noprefix\n");
     printf(".global main\n");
     printf("main:\n");
     
-    //式の最初は数でなければならないので、それをチェックして
-    //最初のmov命令を出力
-    printf("    mov rax, %ld\n", expect_number());
-    
-    // '+ <数>' あるいは '- <数>'というトークンの並びを消費しつつ
     //アセンブリを出力
-    while (!at_eof()) {
-        if (consume('+')) {
-            printf("    add rax, %ld\n", expect_number());
-            continue;
-        }
-        consume('-');
-        printf("    sub rax, %ld\n", expect_number());
-    }
+    gen(root);
+    printf("    pop rax\n");
     printf("    ret\n");
+    
     return 0;
 }
