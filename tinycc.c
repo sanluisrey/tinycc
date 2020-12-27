@@ -46,6 +46,7 @@ struct Node {
 
 Node *expr();
 Node *mul();
+Node *unary();
 Node *primary();
 
 //抽象構文木のルート
@@ -120,7 +121,7 @@ Token *tokenize(char *p){
             p++;
             continue;
         }
-        if (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '(' || *p == ')') {
+        if (strchr("+-*/()", *p)) {
             cur = new_token(TK_RESERVED, cur, p);
             p++;
             continue;
@@ -169,19 +170,29 @@ Node *expr() {
 }
 
 Node *mul() {
-    Node *left = primary();
+    Node *left = unary();
     Node *ret = left;
     for (; ;) {
         if (consume('*')) {
-            Node *right = primary();
+            Node *right = unary();
             ret = new_node(ND_MUL, ret, right);
         } else if (consume('/')){
-            Node *right = primary();
+            Node *right = unary();
             ret = new_node(ND_DIV, ret, right);
         } else {
             return ret;
         }
     }
+}
+
+Node *unary() {
+    if (consume('+')) {
+        return primary();
+    } else if (consume('-')) {
+        Node *right = primary();
+        return new_node(ND_MUL, new_node_num(-1), right);
+    }
+    return primary();
 }
 
 Node *primary() {
