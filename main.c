@@ -7,6 +7,16 @@
 
 #include "tinycc.h"
 
+// 入力プログラム
+char *user_input;
+
+// 現在着目しているトークン
+Token *token;
+
+// 抽象構文木のルート
+Node *root;
+
+
 int main(int argc, char **argv){
     if (argc != 2) {
         fprintf(stderr, "引数の個数が正しくありません\n");

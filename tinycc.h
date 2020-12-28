@@ -33,9 +33,6 @@ struct Token {
     int len;        // トークン文字列の長さ
 };
 
-// 現在着目しているトークン
-Token *token;
-
 // 入力文字列pをトークナイズしてそれを返す
 Token *tokenize(char *p);
 
@@ -80,13 +77,16 @@ Node *mul();
 Node *unary();
 Node *primary();
 
+// 入力プログラム
+extern char *user_input;
+
+// 現在着目しているトークン
+extern Token *token;
+
 // 抽象構文木のルート
-Node *root;
+extern Node *root;
 
 // アセンブリの出力
 void gen(Node *node);
-
-// 入力プログラム
-char *user_input;
 
 #endif /* tinycc_h */
