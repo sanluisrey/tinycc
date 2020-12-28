@@ -8,6 +8,7 @@
 #include "tinycc.h"
 
 // エラーを報告する
+
 void error_at(char *loc, char *fmt, ...) {
     fprintf(stderr,"%s\n", user_input);
     int num = loc - user_input;
@@ -50,6 +51,18 @@ int expect_number(){
     return val;
 }
 
+// 次のトークンが識別子の場合、トークンを一つ読み進めてローカル変数のベースポインタからのオフセットを返す。
+// それ以外の場合にはNULLを返す。
+int expect_lvar() {
+    if (token->kind == TK_IDENT) {
+        int offset = token->str[0] - 'a' + 1;
+        offset *= 8;
+        token = token->next;
+        return offset;
+    }
+    return -1;
+}
+
 bool at_eof(){
     return token->kind == TK_EOF;
 }
@@ -80,7 +93,7 @@ Token *tokenize(char *p){
             p += 2;
             continue;
         }
-        if (strchr("+-*/()><", *p)) {
+        if (strchr("+-*/()><=;", *p)) {
             cur = new_token(TK_RESERVED, cur, p, 1);
             p++;
             continue;
@@ -91,6 +104,10 @@ Token *tokenize(char *p){
             int len = strlen(pp) - strlen(p);
             cur = new_token(TK_NUM, cur, pp, len);
             cur->val = val;
+            continue;
+        }
+        if (isalpha(*p) && islower(*p)) {
+            cur = new_token(TK_IDENT, cur, p++, 1);
             continue;
         }
         error_at(p, "トークナイズできません");
@@ -114,18 +131,51 @@ Node *new_node_num(int val){
     return ret;
 }
 
+Node *new_node_lvar(int offset){
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_LVAR;
+    ret->offset = offset;
+    return ret;
+}
+
 // 生成規則
-// expr       = equality
+// program    = stmt*
+// stmt       = expr ";"
+// expr       = assign
+// assign     = equality ("=" assign)?
 // equality   = relational ("==" relational | "!=" relational)*
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 // add        = mul ("+" mul | "-" mul)*
 // mul        = unary ("*" unary | "/" unary)*
 // unary      = ("+" | "-")? primary
-// primary    = num | "(" expr ")"
+// primary    = num | indent | "(" expr ")"
+
+void program() {
+    int i = 0;
+    while (!at_eof()) {
+        code[i++] = stmt();
+    }
+    code[i] = NULL;
+}
+
+Node *stmt() {
+    Node *ret = expr();
+    expect(";");
+    return ret;
+}
 
 Node *expr() {
-    return equality();
+    return assign();
 };
+
+Node *assign() {
+    Node *left = equality();
+    if (consume("=")) {
+        Node *right = assign();
+        return new_node(ND_ASGMT, left, right);
+    }
+    return left;
+}
 
 Node *equality() {
     Node *left = relational();
@@ -206,10 +256,14 @@ Node *unary() {
 }
 
 Node *primary() {
+    int offset;
     if (consume("(")) {
         Node *ret = expr();
         expect(")");
         return ret;
+    }
+    if ((offset = expect_lvar()) != -1) {
+        return new_node_lvar(offset);
     }
     return new_node_num(expect_number());
 }

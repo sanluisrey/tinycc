@@ -16,6 +16,8 @@ Token *token;
 // 抽象構文木のルート
 Node *root;
 
+// 抽象構文木の配列
+Node *code[100];
 
 int main(int argc, char **argv){
     if (argc != 2) {
@@ -28,16 +30,30 @@ int main(int argc, char **argv){
     token = tokenize(argv[1]);
     
     // 抽象構文木の作成
-    root = expr();
+    program();
     
     // アセンブリの前半部分の出力
     printf(".intel_syntax noprefix\n");
     printf(".global main\n");
     printf("main:\n");
     
+    // プロローグ
+    // 変数26個分の領域を確保する
+    printf("    push rbp\n");
+    printf("    mov rbp, rsp\n");
+    printf("    sub rsp, 208\n");
+    
     //アセンブリを出力
-    gen(root);
-    printf("    pop rax\n");
+    int i = 0;
+    while (code[i] != NULL) {
+        gen(code[i++]);
+        // スタックから式の評価結果をポップする。
+        printf("    pop rax\n");
+    }
+    
+    //エピローグ
+    printf("    mov rsp, rbp\n");
+    printf("    pop rbp\n");
     printf("    ret\n");
     
     return 0;

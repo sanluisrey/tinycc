@@ -18,6 +18,7 @@
 // トークンの種類
 typedef enum {
     TK_RESERVED, // 記号
+    TK_IDENT,   // 識別子
     TK_NUM,      // 整数のトークン
     TK_EOF       // 入力の終わりを表すトークン
 } TokenKind;
@@ -48,7 +49,9 @@ typedef enum {
     ND_GT, // >
     ND_GE, // >=
     ND_LT, // <
-    ND_LE  // <=
+    ND_LE,  // <=
+    ND_ASGMT, // = 代入
+    ND_LVAR, // ローカル変数
 } NodeKind;
 
 typedef struct Node Node;
@@ -59,17 +62,15 @@ struct Node {
     Node *left;     // 左辺
     Node *right;    // 右辺
     int val;        // kindがND_NUMのときのみ扱う
+    int offset;     // kindがND_IDENTのときのみ扱う
 };
 
 // 生成規則
-// expr       = equality
-// equality   = relational ("==" relational | "!=" relational)*
-// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-// add        = mul ("+" mul | "-" mul)*
-// mul        = unary ("*" unary | "/" unary)*
-// unary      = ("+" | "-")? primary
-// primary    = num | "(" expr ")"
+// 定義はparse.c参照
+void program();
+Node *stmt();
 Node *expr();
+Node *assign();
 Node *equality();
 Node *relational();
 Node *add();
@@ -86,7 +87,13 @@ extern Token *token;
 // 抽象構文木のルート
 extern Node *root;
 
+// 抽象構文木の配列
+extern Node *code[100];
+
 // アセンブリの出力
 void gen(Node *node);
+
+// エラーメッセージ(汎用)出力
+void error(char *fmt, ...);
 
 #endif /* tinycc_h */
