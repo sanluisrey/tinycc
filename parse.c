@@ -1,69 +1,12 @@
-#include <ctype.h>
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+//
+//  parser.c
+//  tinycc
+//
+//  Created by sanluisrey on 2020/12/28.
+//
 
-//トークンの種類
-typedef enum {
-    TK_RESERVED, // 記号
-    TK_NUM,      // 整数のトークン
-    TK_EOF       // 入力の終わりを表すトークン
-} TokenKind;
+#include "tinycc.h"
 
-typedef struct Token Token;
-
-//トークン型
-struct Token {
-    TokenKind kind; // トークンの型
-    Token *next;    // 次の入力トークン
-    int val;        // kindがTK_NUMの場合、その数値
-    char *str;      // トークン文字列
-    int len;        // トークン文字列の長さ
-};
-
-//現在着目しているトークン
-Token *token;
-
-//抽象構文木のノードの種類
-typedef enum {
-    ND_ADD, // +
-    ND_SUB, // -
-    ND_MUL, // *
-    ND_DIV, // /
-    ND_NUM, // 整数
-    ND_EQ,  // ==
-    ND_NE, // !=
-    ND_GT, // >
-    ND_GE, // >=
-    ND_LT, // <
-    ND_LE  // <=
-} NodeKind;
-
-typedef struct Node Node;
-
-// 抽象構文木のノードの型
-struct Node {
-    NodeKind kind;  // ノードの型
-    Node *left;     // 左辺
-    Node *right;    // 右辺
-    int val;        // kindがND_NUMのときのみ扱う
-};
-
-Node *expr();
-Node *equality();
-Node *relational();
-Node *add();
-Node *mul();
-Node *unary();
-Node *primary();
-
-//抽象構文木のルート
-Node *root;
-
-//入力プログラム
-char *user_input;
 // エラーを報告する
 void error_at(char *loc, char *fmt, ...) {
     fprintf(stderr,"%s\n", user_input);
@@ -271,77 +214,3 @@ Node *primary() {
     return new_node_num(expect_number());
 }
 
-void gen(Node *node){
-    if (node->kind == ND_NUM) {
-        printf("    push %d\n", node->val);
-        return;
-    }
-    gen(node->left);
-    gen(node->right);
-    printf("    pop rdi\n");
-    printf("    pop rax\n");
-    switch (node->kind) {
-        case ND_ADD:
-            printf("    add rax, rdi\n");
-            break;
-        case ND_SUB:
-            printf("    sub rax, rdi\n");
-            break;
-        case ND_MUL:
-            printf("    imul rax, rdi\n");
-            break;
-        case ND_DIV:
-            printf("    cqo\n");
-            printf("    idiv rdi\n");
-            break;
-        case ND_EQ:
-            printf("    cmp rax, rdi\n");
-            printf("    sete al\n");
-            printf("    movzb rax, al\n");
-            break;
-        case ND_NE:
-            printf("    cmp rax, rdi\n");
-            printf("    setne al\n");
-            printf("    movzb rax, al\n");
-            break;
-        case ND_GE:
-        case ND_LE:
-            printf("    cmp rax, rdi\n");
-            printf("    setle al\n");
-            printf("    movzb rax, al\n");
-            break;
-        case ND_GT:
-        case ND_LT:
-            printf("    cmp rax, rdi\n");
-            printf("    setl al\n");
-            printf("    movzb rax, al\n");
-            break;
-    }
-    printf("    push rax\n");
-}
-
-int main(int argc, char **argv){
-    if (argc != 2) {
-        fprintf(stderr, "引数の個数が正しくありません\n");
-        return 1;
-    }
-    
-    // トークナイズする
-    user_input = argv[1];
-    token = tokenize(argv[1]);
-    
-    // 抽象構文木の作成
-    root = expr();
-    
-    // アセンブリの前半部分の出力
-    printf(".intel_syntax noprefix\n");
-    printf(".global main\n");
-    printf("main:\n");
-    
-    //アセンブリを出力
-    gen(root);
-    printf("    pop rax\n");
-    printf("    ret\n");
-    
-    return 0;
-}
