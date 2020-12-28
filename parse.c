@@ -21,6 +21,10 @@ void error_at(char *loc, char *fmt, ...) {
     exit(1);
 }
 
+bool at_eof() {
+    return token->kind == TK_EOF;
+}
+
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op){
@@ -51,11 +55,26 @@ int expect_number(){
     return val;
 }
 
+// ローカル変数リストに追加済みであれば定義された順番を返す。
+// それ以外の場合、0を返す。
+int exist_in_locals(char *target, int len, LVar *cur) {
+    int i = 0;
+    while (cur->next != NULL) {
+        cur = cur->next;
+        i++;
+        if (len == cur->len && strncmp(target, cur->str, len) == 0) {
+            return i;
+        }
+    }
+    return 0;
+}
+
 // 次のトークンが識別子の場合、トークンを一つ読み進めてローカル変数のベースポインタからのオフセットを返す。
-// それ以外の場合にはNULLを返す。
+// それ以外の場合には-1を返す。
 int expect_lvar() {
     if (token->kind == TK_IDENT) {
-        int offset = token->str[0] - 'a' + 1;
+        LVar *cur = &locals;
+        int offset = exist_in_locals(token->str, token->len, cur);
         offset *= 8;
         token = token->next;
         return offset;
@@ -63,20 +82,10 @@ int expect_lvar() {
     return -1;
 }
 
-bool at_eof() {
-    return token->kind == TK_EOF;
-}
-
+// ローカル変数リストの更新
 void update_loclas(char *target, int len) {
     LVar *cur = &locals;
-    bool exist = false;
-    while (cur->next != NULL) {
-        cur = cur->next;
-        if (len == cur->len && strncmp(target, cur->str, len)) {
-            exist = true;
-            continue;
-        }
-    }
+    int exist = exist_in_locals(target, len, cur);
     if (!exist) {
         LVar *loc = calloc(1, sizeof(LVar));
         loc->len = len;
