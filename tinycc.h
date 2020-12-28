@@ -37,6 +37,14 @@ struct Token {
 // 入力文字列pをトークナイズしてそれを返す
 Token *tokenize(char *p);
 
+typedef struct LVar LVar;
+
+struct LVar {
+    char *str;      // ローカル変数の文字列
+    int len;        // 文字列の長さ
+    LVar *next;     // 次に定義されたローカル変数へのポインタ
+};
+
 // 抽象構文木のノードの種類
 typedef enum {
     ND_ADD, // +
@@ -84,6 +92,9 @@ extern char *user_input;
 // 現在着目しているトークン
 extern Token *token;
 
+// ローカル変数リストのヘッダー
+extern LVar locals;
+
 // 抽象構文木のルート
 extern Node *root;
 
@@ -94,6 +105,7 @@ extern Node *code[100];
 void gen(Node *node);
 
 // エラーメッセージ(汎用)出力
+// 定義はparse.c内
 void error(char *fmt, ...);
 
 #endif /* tinycc_h */

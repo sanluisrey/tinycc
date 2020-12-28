@@ -63,8 +63,27 @@ int expect_lvar() {
     return -1;
 }
 
-bool at_eof(){
+bool at_eof() {
     return token->kind == TK_EOF;
+}
+
+void update_loclas(char *target, int len) {
+    LVar *cur = &locals;
+    bool exist = false;
+    while (cur->next != NULL) {
+        cur = cur->next;
+        if (len == cur->len && strncmp(target, cur->str, len)) {
+            exist = true;
+            continue;
+        }
+    }
+    if (!exist) {
+        LVar *loc = calloc(1, sizeof(LVar));
+        loc->len = len;
+        loc->str = target;
+        loc->next = NULL;
+        cur->next = loc;
+    }
 }
 
 //新しいトークンを作成してcurに繋げる
@@ -82,7 +101,9 @@ Token *tokenize(char *p){
     Token head;
     head.next = NULL;
     Token *cur = &head;
-    int val;
+    
+    locals.next = NULL;
+    
     while (*p) {
         if (*p == '\t' || *p == ' ') {
             p++;
@@ -99,15 +120,21 @@ Token *tokenize(char *p){
             continue;
         }
         if (isdigit(*p)) {
-            char *pp = p;
-            val = strtol(p, &p, 10);
-            int len = strlen(pp) - strlen(p);
-            cur = new_token(TK_NUM, cur, pp, len);
+            char *q = p;
+            int val = strtol(p, &p, 10);
+            int len = p - q;
+            cur = new_token(TK_NUM, cur, q, len);
             cur->val = val;
             continue;
         }
         if (isalpha(*p) && islower(*p)) {
-            cur = new_token(TK_IDENT, cur, p++, 1);
+            char *q = p++;
+            while (isalpha(*p) && islower(*p)) {
+                p++;
+            }
+            int len = p - q;
+            update_loclas(q, len);
+            cur = new_token(TK_IDENT, cur, q, len);
             continue;
         }
         error_at(p, "トークナイズできません");

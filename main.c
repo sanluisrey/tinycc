@@ -13,6 +13,9 @@ char *user_input;
 // 現在着目しているトークン
 Token *token;
 
+// ローカル変数リストのヘッダー
+LVar locals;
+
 // 抽象構文木のルート
 Node *root;
 
