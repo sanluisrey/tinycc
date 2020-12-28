@@ -5,3 +5,5 @@ a.out
 tinycc
 *.xcodeproj
 *.s
+.DS_Store
+input.txt
