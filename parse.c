@@ -202,7 +202,11 @@ Node *new_node_lvar(int offset){
 
 // 生成規則
 // program    = stmt*
-// stmt       = expr ";" | "return" expr ";"
+// stmt       = expr ";"
+//            | "if" "(" expr ")" stmt ("else" stmt)?
+//            | "while" "(" expr ")" stmt
+//            | "for" "(" expr? ";" expr? ";" expr? ")" stmt
+//            | "return" expr ";"
 // expr       = assign
 // assign     = equality ("=" assign)?
 // equality   = relational ("==" relational | "!=" relational)*
@@ -215,22 +219,22 @@ Node *new_node_lvar(int offset){
 void program() {
     int i = 0;
     while (!at_eof()) {
-        code[i] = stmt();
-        if (code[i++]->kind == ND_RETURN) {
-            break;
-        }
+        code[i++] = stmt();
     }
     code[i] = NULL;
 }
 
 Node *stmt() {
+    Node *ret;
     if (consume_return()) {
         Node *right = expr();
-        expect(";");
-        return new_node(ND_RETURN, NULL, right);
+        ret = new_node(ND_RETURN, NULL, right);
+    } else {
+        ret = expr();
     }
-    Node *ret = expr();
-    expect(";");
+    if (!consume(";")) {
+        error_at(token->str, "';'ではないトークンです");
+    }
     return ret;
 }
 

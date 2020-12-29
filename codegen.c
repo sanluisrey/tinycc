@@ -50,6 +50,11 @@ void gen(Node *node){
             return;
         case ND_RETURN:
             gen(node->right);
+            printf("    pop rax\n");
+            //エピローグ
+            printf("    mov rsp, rbp\n");
+            printf("    pop rbp\n");
+            printf("    ret\n");
             return;
     }
     gen(node->left);
