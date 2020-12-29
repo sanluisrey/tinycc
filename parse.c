@@ -21,10 +21,6 @@ void error_at(char *loc, char *fmt, ...) {
     exit(1);
 }
 
-bool at_eof() {
-    return token->kind == TK_EOF;
-}
-
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op){
@@ -95,6 +91,23 @@ void update_loclas(char *target, int len) {
     }
 }
 
+// TK_EOF
+// 現在のトークンがEOFかどうかを返す。
+bool at_eof() {
+    return token->kind == TK_EOF;
+}
+
+// TK_RETURN
+// 次のトークンがreturnの時には、トークンを一つ読み進めて
+// 真を返す。それ以外の場合には偽を返す。
+bool consume_return(){
+    if (token->kind != TK_RETURN) {
+        return false;
+    }
+    token = token->next;
+    return true;
+}
+
 //新しいトークンを作成してcurに繋げる
 Token *new_token(TokenKind kind, Token *cur, char *str, int len){
     Token *tok = calloc(1, sizeof(Token));
@@ -114,7 +127,7 @@ Token *tokenize(char *p){
     locals.next = NULL;
     
     while (*p) {
-        if (*p == '\t' || *p == ' ') {
+        if (isspace(*p)) {
             p++;
             continue;
         }
@@ -134,6 +147,11 @@ Token *tokenize(char *p){
             int len = p - q;
             cur = new_token(TK_NUM, cur, q, len);
             cur->val = val;
+            continue;
+        }
+        if (strncmp(p, "return", 6) == 0 && isspace(*(p+6))) {
+            cur = new_token(TK_RETURN, cur, p, 6);
+            p += 6;
             continue;
         }
         if (isalpha(*p) && islower(*p)) {
@@ -176,7 +194,7 @@ Node *new_node_lvar(int offset){
 
 // 生成規則
 // program    = stmt*
-// stmt       = expr ";"
+// stmt       = expr ";" | "return" expr ";"
 // expr       = assign
 // assign     = equality ("=" assign)?
 // equality   = relational ("==" relational | "!=" relational)*
@@ -189,12 +207,20 @@ Node *new_node_lvar(int offset){
 void program() {
     int i = 0;
     while (!at_eof()) {
-        code[i++] = stmt();
+        code[i] = stmt();
+        if (code[i++]->kind == ND_RETURN) {
+            break;
+        }
     }
     code[i] = NULL;
 }
 
 Node *stmt() {
+    if (consume_return()) {
+        Node *right = expr();
+        expect(";");
+        return new_node(ND_RETURN, NULL, right);
+    }
     Node *ret = expr();
     expect(";");
     return ret;
