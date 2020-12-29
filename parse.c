@@ -79,7 +79,7 @@ int expect_lvar() {
 }
 
 // ローカル変数リストの更新
-void update_loclas(char *target, int len) {
+void update_locals(char *target, int len) {
     LVar *cur = &locals;
     int exist = exist_in_locals(target, len, cur);
     if (!exist) {
@@ -97,11 +97,10 @@ bool at_eof() {
     return token->kind == TK_EOF;
 }
 
-// TK_RETURN
-// 次のトークンがreturnの時には、トークンを一つ読み進めて
+// 次のトークンの種類がkindの時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
-bool consume_return(){
-    if (token->kind != TK_RETURN) {
+bool consume_token(TokenKind kind) {
+    if (token->kind != kind) {
         return false;
     }
     token = token->next;
@@ -157,9 +156,19 @@ Token *tokenize(char *p){
             cur->val = val;
             continue;
         }
-        if (strncmp(p, "return", 6) == 0 && !is_alnum(*(p+6))) {
+        if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
             cur = new_token(TK_RETURN, cur, p, 6);
             p += 6;
+            continue;
+        }
+        if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
+            cur = new_token(TK_IF, cur, p, 2);
+            p += 2;
+            continue;
+        }
+        if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
+            cur = new_token(TK_ELSE, cur, p, 4);
+            p += 4;
             continue;
         }
         if (isalpha(*p)) {
@@ -168,7 +177,7 @@ Token *tokenize(char *p){
                 p++;
             }
             int len = p - q;
-            update_loclas(q, len);
+            update_locals(q, len);
             cur = new_token(TK_IDENT, cur, q, len);
             continue;
         }
@@ -200,6 +209,15 @@ Node *new_node_lvar(int offset){
     return ret;
 }
 
+Node *new_node_if(Node *cond, Node *body, Node *els){
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_IF;
+    ret->cond = cond;
+    ret->body = body;
+    ret->els = els;
+    return ret;
+}
+
 // 生成規則
 // program    = stmt*
 // stmt       = expr ";"
@@ -226,9 +244,20 @@ void program() {
 
 Node *stmt() {
     Node *ret;
-    if (consume_return()) {
+    if (consume_token(TK_RETURN)) {
         Node *right = expr();
         ret = new_node(ND_RETURN, NULL, right);
+    } else if (consume_token(TK_IF)) {
+        expect("(");
+        Node *cond = expr();
+        expect(")");
+        Node *body = stmt();
+        Node *els = NULL;
+        if (consume_token(TK_ELSE)) {
+            els = stmt();
+        }
+        ret = new_node_if(cond, body, els);
+        return ret;
     } else {
         ret = expr();
     }

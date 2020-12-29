@@ -56,6 +56,21 @@ void gen(Node *node){
             printf("    pop rbp\n");
             printf("    ret\n");
             return;
+        case ND_IF:
+            gen(node->cond);
+            // condの結果を0と比較し、0であればL2ラベルへジャンプ
+            printf("    cmp rax, 0\n");
+            printf("    je L2\n");
+            // bodyのコード生成
+            gen(node->body);
+            printf("    jmp L3\n");
+            // elsのコード生成
+            printf("L2:\n");
+            if (node->els != NULL) {
+                gen(node->els);
+            }
+            printf("L3:\n");
+            return;
     }
     gen(node->left);
     gen(node->right);

@@ -58,4 +58,9 @@ assert 7 'return 7;'
 assert 14 'a = 3;b = 5 * 6 - 8;return a + b / 2;return 8;'
 assert 100 'return_ = 100;'
 
+assert 1 'if(1==1)return 1;else return 0;'
+assert 0 'a = 2; b = 1; if(a==b)return 1;else return 0;'
+assert 1 'a = 2; b = 1; if(a==b*2)return 1;else return 0;'
+
 echo OK
+

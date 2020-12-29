@@ -41,10 +41,17 @@ int main(int argc, char **argv){
     printf("main:\n");
     
     // プロローグ
-    // 変数26個分の領域を確保する
+    // ローカル変数の領域を確保する
+    int cnt = 0;
+    for (LVar* it = &locals; it->next != NULL ; it = it->next) {
+        cnt++;
+    }
     printf("    push rbp\n");
     printf("    mov rbp, rsp\n");
-    printf("    sub rsp, 208\n");
+    if (cnt) {
+        cnt *= 8;
+        printf("    sub rsp, %d\n", cnt);
+    }
     
     //アセンブリを出力
     int i = 0;
