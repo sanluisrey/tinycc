@@ -35,7 +35,7 @@ bool consume(char *op){
 // それ以外の場合にはエラーを報告する。
 void expect(char *op){
     if (token->kind != TK_RESERVED || strncmp(token->str, op, strlen(op)) != 0) {
-        error_at(token->str,"'%c'ではありません", op);
+        error_at(token->str,"'%s'ではありません", op);
     }
     token = token->next;
 }
@@ -171,6 +171,11 @@ Token *tokenize(char *p){
             p += 4;
             continue;
         }
+        if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
+            cur = new_token(TK_FOR, cur, p, 3);
+            p += 3;
+            continue;
+        }
         if (isalpha(*p)) {
             char *q = p++;
             while (is_alnum(*p)) {
@@ -218,6 +223,16 @@ Node *new_node_if(Node *cond, Node *body, Node *els){
     return ret;
 }
 
+Node *new_node_for(Node *initialization, Node *cond, Node *step, Node *body){
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_FOR;
+    ret->initialization = initialization;
+    ret->cond = cond;
+    ret->step = step;
+    ret->body = body;
+    return ret;
+}
+
 // 生成規則
 // program    = stmt*
 // stmt       = expr ";"
@@ -258,12 +273,31 @@ Node *stmt() {
         }
         ret = new_node_if(cond, body, els);
         return ret;
+    } else if (consume_token(TK_FOR)) {
+        Node *initialization = NULL;
+        Node *cond = NULL;
+        Node *step = NULL;
+        Node *body;
+        expect("(");
+        if (!consume(";")) {
+            initialization = expr();
+            expect(";");
+        }
+        if (!consume(";")) {
+            cond = expr();
+            expect(";");
+        }
+        if (!consume(")")) {
+            step = expr();
+            expect(")");
+        }
+        body = stmt();
+        ret = new_node_for(initialization, cond, step, body);
+        return ret;
     } else {
         ret = expr();
     }
-    if (!consume(";")) {
-        error_at(token->str, "';'ではないトークンです");
-    }
+    expect(";");
     return ret;
 }
 

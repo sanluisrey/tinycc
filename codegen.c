@@ -59,17 +59,42 @@ void gen(Node *node){
         case ND_IF:
             gen(node->cond);
             // condの結果を0と比較し、0であればL2ラベルへジャンプ
+            printf("    pop rax\n");
             printf("    cmp rax, 0\n");
-            printf("    je L2\n");
+            printf("    je .L2\n");
             // bodyのコード生成
             gen(node->body);
-            printf("    jmp L3\n");
+            printf("    jmp .L3\n");
             // elsのコード生成
-            printf("L2:\n");
+            printf(".L2:\n");
             if (node->els != NULL) {
                 gen(node->els);
             }
-            printf("L3:\n");
+            printf(".L3:\n");
+            return;
+        case ND_FOR:
+            if (node->initialization != NULL) {
+                gen(node->initialization);
+                // initializationを評価し、.L2ラベルへジャンプ
+                printf("    jmp .L2\n");
+            }
+            
+            printf(".L3:\n");
+            if (node->body != NULL) {
+                gen(node->body);
+            }
+            if (node->step != NULL) {
+                gen(node->step);
+            }
+            
+            printf(".L2:\n");
+            if (node->cond != NULL) {
+                gen(node->cond);
+                // condの結果を0と比較し、0でなければ.L3ラベルへジャンプ
+                printf("    pop rax\n");
+                printf("    cmp rax, 0\n");
+                printf("    jne .L3\n");
+            }
             return;
     }
     gen(node->left);

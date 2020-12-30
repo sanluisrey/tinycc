@@ -24,6 +24,7 @@ typedef enum {
     TK_RETURN,      // return
     TK_IF,          // if
     TK_ELSE,        // else
+    TK_FOR,         // for loop
 } TokenKind;
 
 typedef struct Token Token;
@@ -65,6 +66,7 @@ typedef enum {
     ND_LVAR,    // ローカル変数
     ND_RETURN,  // return
     ND_IF,      // if
+    ND_FOR,     // for loop
 } NodeKind;
 
 typedef struct Node Node;
@@ -77,9 +79,12 @@ struct Node {
     int val;        // kindがND_NUMのときのみ扱う
     int offset;     // kindがND_IDENTのときのみ扱う
     
-    Node *cond;     // if文の条件式
-    Node *body;     // if文の真の場合の本体
+    Node *cond;     // if, for, while文の条件式
+    Node *body;     // if文の真の場合の本体, for, while loopの本体
     Node *els;      // if文の偽の場合の本体
+    
+    Node *initialization;     // for(式1;式2;式3) 式1を表す
+    Node *step;           // for(式1;式2;式3) 式3を表す
 };
 
 // 生成規則

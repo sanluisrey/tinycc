@@ -61,6 +61,11 @@ assert 100 'return_ = 100;'
 assert 1 'if(1==1)return 1;else return 0;'
 assert 0 'a = 2; b = 1; if(a==b)return 1;else return 0;'
 assert 1 'a = 2; b = 1; if(a==b*2)return 1;else return 0;'
+assert 1 'a = 2; b = 1; if(a==b*2)return 1;return 2;'
+
+assert 45 'x = 0;for(i = 0; i < 10; i = i + 1) x = x + i;return x;'
+assert 15 'for(i = 0; i < 10; ) i = 1 + i;return 15;'
+assert 11 'for(; ; ) return 11;'
 
 echo OK
 
