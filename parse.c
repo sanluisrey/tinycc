@@ -176,6 +176,11 @@ Token *tokenize(char *p){
             p += 3;
             continue;
         }
+        if (strncmp(p, "while", 5) == 0 && !is_alnum(p[5])) {
+            cur = new_token(TK_WHILE, cur, p, 5);
+            p += 5;
+            continue;
+        }
         if (isalpha(*p)) {
             char *q = p++;
             while (is_alnum(*p)) {
@@ -232,6 +237,15 @@ Node *new_node_for(Node *initialization, Node *cond, Node *step, Node *body){
     ret->body = body;
     return ret;
 }
+
+Node *new_node_while(Node *cond, Node *body){
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_WHILE;
+    ret->cond = cond;
+    ret->body = body;
+    return ret;
+}
+
 
 // 生成規則
 // program    = stmt*
@@ -293,6 +307,13 @@ Node *stmt() {
         }
         body = stmt();
         ret = new_node_for(initialization, cond, step, body);
+        return ret;
+    } else if (consume_token(TK_WHILE)) {
+        expect("(");
+        Node *cond = expr();
+        expect(")");
+        Node *body = stmt();
+        ret = new_node_while(cond, body);
         return ret;
     } else {
         ret = expr();

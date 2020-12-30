@@ -96,6 +96,17 @@ void gen(Node *node){
                 printf("    jne .L3\n");
             }
             return;
+        case ND_WHILE:
+            printf("    jmp .WHILE_BODY\n");
+            printf(".WHILE_COND:\n");
+            gen(node->body);
+            printf(".WHILE_BODY:\n");
+            gen(node->cond);
+            // condの結果を0と比較し、0でなければ.L3ラベルへジャンプ
+            printf("    pop rax\n");
+            printf("    cmp rax, 0\n");
+            printf("    jne .WHILE_COND\n");
+            return;
     }
     gen(node->left);
     gen(node->right);
