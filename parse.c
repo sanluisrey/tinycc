@@ -81,7 +81,13 @@ int expect_lvar() {
 // ローカル変数リストの更新
 void update_locals(char *target, int len) {
     LVar *cur = &locals;
-    int exist = exist_in_locals(target, len, cur);
+    int exist = 0;
+    while (cur->next != NULL) {
+        cur = cur->next;
+        if (len == cur->len && strncmp(target, cur->str, len) == 0) {
+            exist++;
+        }
+    }
     if (!exist) {
         LVar *loc = calloc(1, sizeof(LVar));
         loc->len = len;
@@ -261,7 +267,7 @@ Node *new_node_while(Node *cond, Node *body){
 // add        = mul ("+" mul | "-" mul)*
 // mul        = unary ("*" unary | "/" unary)*
 // unary      = ("+" | "-")? primary
-// primary    = num | indent | "(" expr ")"
+// primary    = num | ident ("(" ")")? | "(" expr ")"
 
 void program() {
     int i = 0;

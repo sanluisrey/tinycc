@@ -121,7 +121,9 @@ void gen(Node *node){
             while (node->next != NULL) {
                 gen(node->next);
                 node = node->next;
+                //printf("    pop rax\n");
             }
+            return;
         }
     }
     gen(node->left);
