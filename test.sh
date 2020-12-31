@@ -68,6 +68,9 @@ assert 15 'for(i = 0; i < 10; ) i = 1 + i;return 15;'
 assert 11 'for(; ; ) return 11;'
 
 assert 50 'i = 0; while(i < 50) i = i + 1;return i;'
+assert 95 'x = 0;for(i = 0; i < 5; i = i + 1) x = x + i;for(i = 5; i < 10; i = i + 1) x = x + i;while(i < 50) i = i + 1;return x+i;'
+
+assert 250 'x=0;i = 0; while(i < 50) {i = i + 1;x = x + 5;}return x;'
 
 echo OK
 

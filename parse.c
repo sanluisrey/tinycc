@@ -143,7 +143,7 @@ Token *tokenize(char *p){
             p += 2;
             continue;
         }
-        if (strchr("+-*/()><=;", *p)) {
+        if (strchr("+-*/()><=;{}", *p)) {
             cur = new_token(TK_RESERVED, cur, p, 1);
             p++;
             continue;
@@ -246,10 +246,10 @@ Node *new_node_while(Node *cond, Node *body){
     return ret;
 }
 
-
 // 生成規則
 // program    = stmt*
 // stmt       = expr ";"
+//            | "{" stmt* "}"
 //            | "if" "(" expr ")" stmt ("else" stmt)?
 //            | "while" "(" expr ")" stmt
 //            | "for" "(" expr? ";" expr? ";" expr? ")" stmt
@@ -314,6 +314,21 @@ Node *stmt() {
         expect(")");
         Node *body = stmt();
         ret = new_node_while(cond, body);
+        return ret;
+    } else if(consume("{")) {
+        Node *ret = calloc(1, sizeof(Node));
+        Node *cur = calloc(1, sizeof(Node));
+        ret->next = NULL;
+        ret->kind = ND_BLOCK;
+        ret->next = stmt();
+        cur = ret->next;
+        while (!consume("}")) {
+            if (at_eof()) {
+                expect("}");
+            }
+            cur->next = stmt();
+            cur = cur->next;
+        }
         return ret;
     } else {
         ret = expr();

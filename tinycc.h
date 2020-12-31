@@ -69,6 +69,7 @@ typedef enum {
     ND_IF,      // if
     ND_FOR,     // for loop
     ND_WHILE,   // while
+    ND_BLOCK,   // {}
 } NodeKind;
 
 typedef struct Node Node;
@@ -87,6 +88,8 @@ struct Node {
     
     Node *initialization;     // for(式1;式2;式3) 式1を表す
     Node *step;           // for(式1;式2;式3) 式3を表す
+    
+    Node *next;     // block内の構文の連結リスト
 };
 
 // 生成規則

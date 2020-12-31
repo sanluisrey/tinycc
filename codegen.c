@@ -16,6 +16,12 @@ void error(char *fmt, ...) {
     exit(1);
 }
 
+// 制御構文のラベルの番号づけ
+int count(void) {
+    static int i = 1;
+    return i++;
+}
+
 // 式を左辺値として計算する。
 // ノードが変数を指す場合、変数のアドレスを計算し、スタックにプッシュする。
 // それ以外の場合、エラーを表示する。
@@ -56,57 +62,67 @@ void gen(Node *node){
             printf("    pop rbp\n");
             printf("    ret\n");
             return;
-        case ND_IF:
+        case ND_IF: {
+            int c = count();
             gen(node->cond);
-            // condの結果を0と比較し、0であればL2ラベルへジャンプ
+            // condの結果を0と比較し、0であればLelseラベルへジャンプ
             printf("    pop rax\n");
             printf("    cmp rax, 0\n");
-            printf("    je .L2\n");
+            printf("    je .Lelse%d\n", c);
             // bodyのコード生成
             gen(node->body);
-            printf("    jmp .L3\n");
+            printf("    jmp .Lend%d\n", c);
             // elsのコード生成
-            printf(".L2:\n");
+            printf(".Lelse%d:\n", c);
             if (node->els != NULL) {
                 gen(node->els);
             }
-            printf(".L3:\n");
+            printf(".Lend%d:\n", c);
             return;
-        case ND_FOR:
+        }
+        case ND_FOR: {
+            int c = count();
             if (node->initialization != NULL) {
                 gen(node->initialization);
-                // initializationを評価し、.L2ラベルへジャンプ
-                printf("    jmp .L2\n");
             }
+            printf(".Lbegin%d:\n", c);
             
-            printf(".L3:\n");
-            if (node->body != NULL) {
-                gen(node->body);
+            if (node->cond != NULL) {
+                gen(node->cond);
+                // condの結果を0と比較し、0でなければ.Lendラベルへジャンプ
+                printf("    pop rax\n");
+                printf("    cmp rax, 0\n");
+                printf("    je .Lend%d\n", c);
             }
+            gen(node->body);
             if (node->step != NULL) {
                 gen(node->step);
             }
-            
-            printf(".L2:\n");
-            if (node->cond != NULL) {
-                gen(node->cond);
-                // condの結果を0と比較し、0でなければ.L3ラベルへジャンプ
-                printf("    pop rax\n");
-                printf("    cmp rax, 0\n");
-                printf("    jne .L3\n");
-            }
+            printf("    jmp .Lbegin%d\n", c);
+            printf(".Lend%d:\n", c);
             return;
-        case ND_WHILE:
-            printf("    jmp .WHILE_BODY\n");
-            printf(".WHILE_COND:\n");
-            gen(node->body);
-            printf(".WHILE_BODY:\n");
+        }
+        case ND_WHILE: {
+            int c = count();
+            printf(".Lbegin%d:\n", c);
             gen(node->cond);
             // condの結果を0と比較し、0でなければ.L3ラベルへジャンプ
             printf("    pop rax\n");
             printf("    cmp rax, 0\n");
-            printf("    jne .WHILE_COND\n");
+            printf("    je .Lend%d\n", c);
+            
+            gen(node->body);
+            printf("    jmp .Lbegin%d\n", c);
+            printf(".Lend%d:\n", c);
+            
             return;
+        }
+        case ND_BLOCK: {
+            while (node->next != NULL) {
+                gen(node->next);
+                node = node->next;
+            }
+        }
     }
     gen(node->left);
     gen(node->right);
