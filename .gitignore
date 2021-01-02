@@ -7,3 +7,4 @@ tinycc
 *.s
 .DS_Store
 input.txt
+test.c

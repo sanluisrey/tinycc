@@ -9,6 +9,7 @@
 
 // ローカル変数リスト
 static LVar *locals;
+
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op, Token **rest){
@@ -91,7 +92,7 @@ bool consume_token(TokenKind kind, Token **rest) {
     return true;
 }
 
-Node *new_node(NodeKind kind, Node *lhs, Node *rhs) {
+Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
     Node *ret = calloc(1, sizeof(Node));
     ret->kind = kind;
     ret->left = lhs;
@@ -140,6 +141,14 @@ Node *new_node_while(Node *cond, Node *body){
     return ret;
 }
 
+Node *new_node_function(Token *tok) {
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_FUNCTION;
+    ret->name = tok->str;
+    ret->len = tok->len;
+    return ret;
+}
+
 // 生成規則
 // program    = stmt*
 // stmt       = expr ";"
@@ -173,7 +182,7 @@ Node *stmt(Token **rest) {
     Node *ret;
     if (consume_token(TK_RETURN, rest)) {
         Node *right = expr(rest);
-        ret = new_node(ND_RETURN, NULL, right);
+        ret = new_node_binary(ND_RETURN, NULL, right);
     } else if (consume_token(TK_IF, rest)) {
         expect("(", rest);
         Node *cond = expr(rest);
@@ -243,7 +252,7 @@ Node *assign(Token **rest) {
     Node *left = equality(rest);
     if (consume("=",rest)) {
         Node *right = assign(rest);
-        return new_node(ND_ASGMT, left, right);
+        return new_node_binary(ND_ASGMT, left, right);
     }
     return left;
 }
@@ -254,10 +263,10 @@ Node *equality(Token **rest) {
     for (; ; ) {
         if (consume("==", rest)) {
             Node *right = relational(rest);
-            ret = new_node(ND_EQ, ret, right);
+            ret = new_node_binary(ND_EQ, ret, right);
         } else if (consume("!=", rest)) {
             Node *right = relational(rest);
-            ret = new_node(ND_NE, ret, right);
+            ret = new_node_binary(ND_NE, ret, right);
         } else {
             return ret;
         }
@@ -268,16 +277,16 @@ Node *relational(Token **rest) {
     for (; ; ) {
         if (consume(">=", rest)) {
             Node *left = add(rest);
-            ret = new_node(ND_GE, left, ret);
+            ret = new_node_binary(ND_GE, left, ret);
         } else if (consume("<=", rest)) {
             Node *right = add(rest);
-            ret = new_node(ND_LE, ret, right);
+            ret = new_node_binary(ND_LE, ret, right);
         } else if (consume(">", rest)){
             Node *left = add(rest);
-            ret = new_node(ND_GT, left, ret);
+            ret = new_node_binary(ND_GT, left, ret);
         } else if (consume("<", rest)) {
             Node *right = add(rest);
-            ret = new_node(ND_LT, ret, right);
+            ret = new_node_binary(ND_LT, ret, right);
         } else {
             return ret;
         }
@@ -290,10 +299,10 @@ Node *add(Token **rest) {
     for (; ; ) {
         if (consume("+", rest)) {
             Node *right = mul(rest);
-            ret = new_node(ND_ADD, ret, right);
+            ret = new_node_binary(ND_ADD, ret, right);
         } else if (consume("-", rest)){
             Node *right = mul(rest);
-            ret = new_node(ND_SUB, ret, right);
+            ret = new_node_binary(ND_SUB, ret, right);
         } else {
             return ret;
         }
@@ -306,10 +315,10 @@ Node *mul(Token **rest) {
     for (; ;) {
         if (consume("*", rest)) {
             Node *right = unary(rest);
-            ret = new_node(ND_MUL, ret, right);
+            ret = new_node_binary(ND_MUL, ret, right);
         } else if (consume("/", rest)){
             Node *right = unary(rest);
-            ret = new_node(ND_DIV, ret, right);
+            ret = new_node_binary(ND_DIV, ret, right);
         } else {
             return ret;
         }
@@ -321,20 +330,32 @@ Node *unary(Token **rest) {
         return primary(rest);
     } else if (consume("-",rest)) {
         Node *right = primary(rest);
-        return new_node(ND_SUB, new_node_num(0), right);
+        return new_node_binary(ND_SUB, new_node_num(0), right);
     }
     return primary(rest);
 }
 
 Node *primary(Token **rest) {
-    int *offset = calloc(1, sizeof(int));
     if (consume("(",rest)) {
         Node *ret = expr(rest);
         expect(")",rest);
         return ret;
     }
-    if (consume_ident(rest, offset)) {
-        return new_node_lvar(*offset);
+    Token *tok;
+    tok = *rest;
+    if (tok->kind == TK_IDENT) {
+        tok = tok->next;
+        if (tok->len == 1 && strncmp(tok->str, "(", 1) == 0) {
+            Node *ret = new_node_function(*rest);
+            consume_token(TK_IDENT, rest);
+            consume("(", rest);
+            expect(")", rest);
+            return ret;
+        }
+        int *offset = calloc(1, sizeof(int));
+        if (consume_ident(rest, offset)) {
+            return new_node_lvar(*offset);
+        }
     }
     return new_node_num(expect_number(rest));
 }

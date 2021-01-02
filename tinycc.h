@@ -71,6 +71,7 @@ typedef enum {
     ND_FOR,     // for loop
     ND_WHILE,   // while
     ND_BLOCK,   // {}
+    ND_FUNCTION,// function
 } NodeKind;
 
 typedef struct Node Node;
@@ -82,6 +83,8 @@ struct Node {
     Node *right;    // 右辺
     int val;        // kindがND_NUMのときのみ扱う
     int offset;     // kindがND_IDENTのときのみ扱う
+    char *name;     // kindがND_FUNCTIONのときの識別子の名前
+    int len;        // kindがND_FUNCTIONのときの識別子の名前の長さ
     
     Node *cond;     // if, for, while文の条件式
     Node *body;     // if文の真の場合の本体, for, while loopの本体

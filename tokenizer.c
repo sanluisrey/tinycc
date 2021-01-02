@@ -34,7 +34,9 @@ int is_alnum(char c) {
 //新しいトークンを作成してcurに繋げる
 Token *new_token(TokenKind kind, Token *cur, char *str, int len){
     Token *tok = calloc(1, sizeof(Token));
-    tok->str = str;
+    char *q = calloc(1, sizeof(char));
+    strncpy(q, str, len);
+    tok->str = q;
     tok->kind = kind;
     tok->len = len;
     cur->next = tok;

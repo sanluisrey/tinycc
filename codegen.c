@@ -135,6 +135,10 @@ void gen(Node *node){
             }
             return;
         }
+        case ND_FUNCTION: {
+            printf("    call %s\n", node->name);
+            return;
+        }
     }
     gen(node->left);
     gen(node->right);
