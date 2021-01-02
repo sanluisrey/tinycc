@@ -7,17 +7,8 @@
 
 #include "tinycc.h"
 
-// 入力プログラム
-char *user_input;
-
-// 現在着目しているトークン
-Token *token;
-
 // ローカル変数リストのヘッダー
 LVar locals;
-
-// 抽象構文木のルート
-Node *root;
 
 // 抽象構文木の配列
 Node *code[100];
@@ -27,13 +18,13 @@ int main(int argc, char **argv){
         fprintf(stderr, "引数の個数が正しくありません\n");
         return 1;
     }
-    
+    // 現在着目しているトークン
+    static Token *token;
     // トークナイズする
-    user_input = argv[1];
     token = tokenize(argv[1]);
     
     // 抽象構文木の作成
-    program();
+    program(&token);
     
     // アセンブリの前半部分の出力
     printf(".intel_syntax noprefix\n");

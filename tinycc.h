@@ -105,11 +105,8 @@ Node *mul();
 Node *unary();
 Node *primary();
 
-// 入力プログラム
-extern char *user_input;
-
 // 現在着目しているトークン
-extern Token *token;
+//extern Token *token;
 
 // ローカル変数リストのヘッダー
 extern LVar locals;
@@ -126,5 +123,6 @@ void gen(Node *node);
 // エラーメッセージ(汎用)出力
 // 定義はparse.c内
 void error(char *fmt, ...);
+void error_at(char *loc, char *fmt, ...);
 
 #endif /* tinycc_h */

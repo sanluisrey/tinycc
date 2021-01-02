@@ -1,0 +1,135 @@
+//
+//  tokenizer.c
+//  tinycc
+//
+//  Created by sanluisrey on 2021/01/02.
+//
+
+#include "tinycc.h"
+
+// 入力プログラム
+static char *user_input;
+
+// エラーを報告する
+void error_at(char *loc, char *fmt, ...) {
+    fprintf(stderr,"%s\n", user_input);
+    int num = loc - user_input;
+    fprintf(stderr,"%*s",num,  " ");
+    fprintf(stderr, "^ ");
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    fprintf(stderr, "\n");
+    exit(1);
+}
+
+// ローカル変数リストの更新
+void update_locals(char *target, int len) {
+    LVar *cur = &locals;
+    int exist = 0;
+    while (cur->next != NULL) {
+        cur = cur->next;
+        if (len == cur->len && strncmp(target, cur->str, len) == 0) {
+            exist++;
+        }
+    }
+    if (!exist) {
+        LVar *loc = calloc(1, sizeof(LVar));
+        loc->len = len;
+        loc->str = target;
+        loc->next = NULL;
+        cur->next = loc;
+    }
+}
+
+
+// トークンを構成する文字かどうかを返す。
+int is_alnum(char c) {
+  return ('a' <= c && c <= 'z') ||
+         ('A' <= c && c <= 'Z') ||
+         ('0' <= c && c <= '9') ||
+         (c == '_');
+}
+
+//新しいトークンを作成してcurに繋げる
+Token *new_token(TokenKind kind, Token *cur, char *str, int len){
+    Token *tok = calloc(1, sizeof(Token));
+    tok->str = str;
+    tok->kind = kind;
+    tok->len = len;
+    cur->next = tok;
+    return tok;
+}
+
+//入力文字列pをトークナイズしてそれを返す
+Token *tokenize(char *p){
+    user_input = p;
+    Token head;
+    head.next = NULL;
+    Token *cur = &head;
+    
+    locals.next = NULL;
+    
+    while (*p) {
+        if (isspace(*p)) {
+            p++;
+            continue;
+        }
+        if (!strncmp(p, ">=", 2) || !strncmp(p, "<=", 2) || !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
+            cur = new_token(TK_RESERVED, cur, p, 2);
+            p += 2;
+            continue;
+        }
+        if (strchr("+-*/()><=;{}", *p)) {
+            cur = new_token(TK_RESERVED, cur, p, 1);
+            p++;
+            continue;
+        }
+        if (isdigit(*p)) {
+            char *q = p;
+            int val = strtol(p, &p, 10);
+            int len = p - q;
+            cur = new_token(TK_NUM, cur, q, len);
+            cur->val = val;
+            continue;
+        }
+        if (strncmp(p, "return", 6) == 0 && !is_alnum(p[6])) {
+            cur = new_token(TK_RETURN, cur, p, 6);
+            p += 6;
+            continue;
+        }
+        if (strncmp(p, "if", 2) == 0 && !is_alnum(p[2])) {
+            cur = new_token(TK_IF, cur, p, 2);
+            p += 2;
+            continue;
+        }
+        if (strncmp(p, "else", 4) == 0 && !is_alnum(p[4])) {
+            cur = new_token(TK_ELSE, cur, p, 4);
+            p += 4;
+            continue;
+        }
+        if (strncmp(p, "for", 3) == 0 && !is_alnum(p[3])) {
+            cur = new_token(TK_FOR, cur, p, 3);
+            p += 3;
+            continue;
+        }
+        if (strncmp(p, "while", 5) == 0 && !is_alnum(p[5])) {
+            cur = new_token(TK_WHILE, cur, p, 5);
+            p += 5;
+            continue;
+        }
+        if (isalpha(*p)) {
+            char *q = p++;
+            while (is_alnum(*p)) {
+                p++;
+            }
+            int len = p - q;
+            update_locals(q, len);
+            cur = new_token(TK_IDENT, cur, q, len);
+            continue;
+        }
+        error_at(p, "トークナイズできません");
+    }
+    new_token(TK_EOF, cur, p, 1);
+    return head.next;
+}
