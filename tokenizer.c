@@ -23,26 +23,6 @@ void error_at(char *loc, char *fmt, ...) {
     exit(1);
 }
 
-// ローカル変数リストの更新
-void update_locals(char *target, int len) {
-    LVar *cur = &locals;
-    int exist = 0;
-    while (cur->next != NULL) {
-        cur = cur->next;
-        if (len == cur->len && strncmp(target, cur->str, len) == 0) {
-            exist++;
-        }
-    }
-    if (!exist) {
-        LVar *loc = calloc(1, sizeof(LVar));
-        loc->len = len;
-        loc->str = target;
-        loc->next = NULL;
-        cur->next = loc;
-    }
-}
-
-
 // トークンを構成する文字かどうかを返す。
 int is_alnum(char c) {
   return ('a' <= c && c <= 'z') ||
@@ -67,8 +47,6 @@ Token *tokenize(char *p){
     Token head;
     head.next = NULL;
     Token *cur = &head;
-    
-    locals.next = NULL;
     
     while (*p) {
         if (isspace(*p)) {
@@ -124,7 +102,6 @@ Token *tokenize(char *p){
                 p++;
             }
             int len = p - q;
-            update_locals(q, len);
             cur = new_token(TK_IDENT, cur, q, len);
             continue;
         }

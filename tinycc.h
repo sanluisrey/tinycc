@@ -47,6 +47,7 @@ typedef struct LVar LVar;
 struct LVar {
     char *str;      // ローカル変数の文字列
     int len;        // 文字列の長さ
+    int offset; // RBPからのオフセット
     LVar *next;     // 次に定義されたローカル変数へのポインタ
 };
 
@@ -92,9 +93,19 @@ struct Node {
     Node *next;     // block内の構文の連結リスト
 };
 
+// プログラム全体を表す
+typedef struct Function Function;
+
+struct Function {
+    Node *code;
+    LVar *locals;
+    int stack_size;
+};
+
+
 // 生成規則
 // 定義はparse.c参照
-void program();
+Function *program();
 Node *stmt();
 Node *expr();
 Node *assign();
@@ -105,12 +116,6 @@ Node *mul();
 Node *unary();
 Node *primary();
 
-// 現在着目しているトークン
-//extern Token *token;
-
-// ローカル変数リストのヘッダー
-extern LVar locals;
-
 // 抽象構文木のルート
 extern Node *root;
 
@@ -119,6 +124,7 @@ extern Node *code[100];
 
 // アセンブリの出力
 void gen(Node *node);
+void codegen(Function *prog);
 
 // エラーメッセージ(汎用)出力
 // 定義はparse.c内

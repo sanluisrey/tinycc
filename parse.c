@@ -7,6 +7,8 @@
 
 #include "tinycc.h"
 
+// ローカル変数リスト
+static LVar *locals;
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op, Token **rest){
@@ -40,32 +42,36 @@ int expect_number(Token **rest){
     return val;
 }
 
-// ローカル変数リストに追加済みであれば定義された順番を返す。
-// それ以外の場合、0を返す。
-int exist_in_locals(char *target, int len, LVar *cur) {
-    int i = 0;
-    while (cur->next != NULL) {
-        cur = cur->next;
-        i++;
-        if (len == cur->len && strncmp(target, cur->str, len) == 0) {
-            return i;
+// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+LVar *find_lvar(Token *tok) {
+    for (LVar *cur = locals; cur != NULL; cur = cur->next) {
+        if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
+            return cur;
         }
     }
-    return 0;
+    return NULL;
 }
 
-// 次のトークンが識別子の場合、トークンを一つ読み進めてローカル変数のベースポインタからのオフセットを返す。
-// それ以外の場合には-1を返す。
-int expect_lvar(Token **rest) {
+// 次のトークンの種類がTK_IDENTの時には、ローカル変数リストを更新後、トークンを一つ読み進めて
+// 真を返す。それ以外の場合には偽を返す。
+bool consume_ident(Token **rest, int *offset) {
     Token *token = *rest;
-    if (token->kind == TK_IDENT) {
-        LVar *cur = &locals;
-        int offset = exist_in_locals(token->str, token->len, cur);
-        offset *= 8;
-        *rest = token->next;
-        return offset;
+    if (token->kind != TK_IDENT) {
+        return false;
     }
-    return -1;
+    LVar *lvar = find_lvar(token);
+    if (lvar == NULL) {
+        lvar = calloc(1, sizeof(LVar));
+        lvar->str = token->str;
+        lvar->len = token->len;
+        int base = locals != NULL ? locals->offset : 0;
+        lvar->offset = base + 8;
+        lvar->next = locals;
+        locals = lvar;
+    }
+    *offset = lvar->offset;
+    *rest = token->next;
+    return true;
 }
 
 // TK_EOF
@@ -151,12 +157,16 @@ Node *new_node_while(Node *cond, Node *body){
 // unary      = ("+" | "-")? primary
 // primary    = num | ident ("(" ")")? | "(" expr ")"
 
-void program(Token **rest) {
-    int i = 0;
+Function *program(Token **rest) {
+    Node head = {};
+    Node *cur = &head;
     while (!at_eof(*rest)) {
-        code[i++] = stmt(rest);
+        cur = cur->next = stmt(rest);
     }
-    code[i] = NULL;
+    Function *prog = calloc(1, sizeof(Function));
+    prog->code = head.next;
+    prog->locals = locals;
+    return prog;
 }
 
 Node *stmt(Token **rest) {
@@ -317,14 +327,14 @@ Node *unary(Token **rest) {
 }
 
 Node *primary(Token **rest) {
-    int offset;
+    int *offset = calloc(1, sizeof(int));
     if (consume("(",rest)) {
         Node *ret = expr(rest);
         expect(")",rest);
         return ret;
     }
-    if ((offset = expect_lvar(rest)) != -1) {
-        return new_node_lvar(offset);
+    if (consume_ident(rest, offset)) {
+        return new_node_lvar(*offset);
     }
     return new_node_num(expect_number(rest));
 }

@@ -22,6 +22,13 @@ int count(void) {
     return i++;
 }
 
+void assign_lvar_offset(Function *prog) {
+    prog->stack_size = 0;
+    if (prog->locals != NULL) {
+        prog->stack_size = prog->locals->offset;
+    }
+}
+
 // 式を左辺値として計算する。
 // ノードが変数を指す場合、変数のアドレスを計算し、スタックにプッシュする。
 // それ以外の場合、エラーを表示する。
@@ -171,4 +178,26 @@ void gen(Node *node){
             break;
     }
     printf("    push rax\n");
+}
+
+void codegen(Function *prog) {
+    // アセンブリの前半部分の出力
+    printf(".intel_syntax noprefix\n");
+    printf(".global main\n");
+    printf("main:\n");
+    // ローカル変数領域の確保
+    assign_lvar_offset(prog);
+    printf("    push rbp\n");
+    printf("    mov rbp, rsp\n");
+    printf("    sub rsp, %d\n", prog->stack_size);
+    // コードの本体部分の出力
+    for (Node *body = prog->code; body != NULL; body = body->next) {
+        gen(body);
+        // スタックから式の評価結果をポップする。
+        printf("    pop rax\n");
+    }
+    //エピローグ
+    printf("    mov rsp, rbp\n");
+    printf("    pop rbp\n");
+    printf("    ret\n");
 }
