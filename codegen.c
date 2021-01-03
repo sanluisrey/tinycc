@@ -7,6 +7,9 @@
 
 #include "tinycc.h"
 
+// 関数呼び出しの引数に用いるレジスタ
+static char* MREGS[] = {"rdi", "rsi", "rdx", "rcx", "r8d", "r9d"};
+
 // エラーを報告する
 void error(char *fmt, ...) {
     va_list ap;
@@ -135,7 +138,14 @@ void gen(Node *node){
             }
             return;
         }
-        case ND_FUNCTION: {
+        case ND_FUNCCALL: {
+            Node *args = node->args;
+            while (args != NULL) {
+                gen(args);
+                printf("    pop rax\n");
+                printf("    mov %s, rax\n", MREGS[args->ireg]);
+                args = args->next;
+            }
             printf("    call %s\n", node->name);
             return;
         }

@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 // トークンの種類
 typedef enum {
@@ -40,6 +41,7 @@ struct Token {
 };
 
 // 入力文字列pをトークナイズしてそれを返す
+// tokenizer.c
 Token *tokenize(char *p);
 
 typedef struct LVar LVar;
@@ -71,7 +73,7 @@ typedef enum {
     ND_FOR,     // for loop
     ND_WHILE,   // while
     ND_BLOCK,   // {}
-    ND_FUNCTION,// function
+    ND_FUNCCALL,// 関数呼び出し
 } NodeKind;
 
 typedef struct Node Node;
@@ -94,6 +96,8 @@ struct Node {
     Node *step;           // for(式1;式2;式3) 式3を表す
     
     Node *next;     // block内の構文の連結リスト
+    Node *args;     // 関数呼び出しの引数
+    int ireg;       // 関数呼び出しの引数の順序
 };
 
 // プログラム全体を表す
@@ -107,30 +111,29 @@ struct Function {
 
 
 // 生成規則
-// 定義はparse.c参照
-Function *program();
-Node *stmt();
-Node *expr();
-Node *assign();
-Node *equality();
-Node *relational();
-Node *add();
-Node *mul();
-Node *unary();
-Node *primary();
-
-// 抽象構文木のルート
-extern Node *root;
+// parse.c
+Function *program(Token **rest);
+Node *stmt(Token **rest);
+Node *expr(Token **rest);
+Node *assign(Token **rest);
+Node *equality(Token **rest);
+Node *relational(Token **rest);
+Node *add(Token **rest);
+Node *mul(Token **rest);
+Node *unary(Token **rest);
+Node *primary(Token **rest);
+Node *args(Token **rest);
 
 // 抽象構文木の配列
 extern Node *code[100];
 
 // アセンブリの出力
+// codegen.c
 void gen(Node *node);
 void codegen(Function *prog);
 
 // エラーメッセージ(汎用)出力
-// 定義はparse.c内
+// parse.c
 void error(char *fmt, ...);
 void error_at(char *loc, char *fmt, ...);
 

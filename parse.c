@@ -141,9 +141,9 @@ Node *new_node_while(Node *cond, Node *body){
     return ret;
 }
 
-Node *new_node_function(Token *tok) {
+Node *new_node_funccall(Token *tok) {
     Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_FUNCTION;
+    ret->kind = ND_FUNCCALL;
     ret->name = tok->str;
     ret->len = tok->len;
     return ret;
@@ -164,7 +164,8 @@ Node *new_node_function(Token *tok) {
 // add        = mul ("+" mul | "-" mul)*
 // mul        = unary ("*" unary | "/" unary)*
 // unary      = ("+" | "-")? primary
-// primary    = num | ident ("(" ")")? | "(" expr ")"
+// primary    = num | ident ("("(args)? ")")? | "(" expr ")"
+// args       = expr ("," args )?
 
 Function *program(Token **rest) {
     Node head = {};
@@ -346,9 +347,13 @@ Node *primary(Token **rest) {
     if (tok->kind == TK_IDENT) {
         tok = tok->next;
         if (tok->len == 1 && strncmp(tok->str, "(", 1) == 0) {
-            Node *ret = new_node_function(*rest);
+            Node *ret = new_node_funccall(*rest);
             consume_token(TK_IDENT, rest);
             consume("(", rest);
+            ret->args = args(rest);
+            if(ret->args->ireg > 6) {
+                error_at((*rest)->str, "引数が6個より多いです。\n");
+            }
             expect(")", rest);
             return ret;
         }
@@ -360,3 +365,22 @@ Node *primary(Token **rest) {
     return new_node_num(expect_number(rest));
 }
 
+Node *args(Token **rest) {
+    Token *tok = *rest;
+    int ireg = 0;
+    if (tok->len == 1 && strncmp(tok->str, ")", 1) == 0) {
+        return NULL;
+    }
+    Node head;
+    Node *args = &head;
+    args->next = expr(rest);
+    args = args->next;
+    args->ireg = ireg;
+    while (consume(",", rest)) {
+        Node *new = expr(rest);
+        new->next = head.next;
+        head.next = new;
+        new->ireg = ++ireg;
+    }
+    return head.next;
+}
