@@ -26,7 +26,7 @@ bool consume(char *op, Token **rest){
 void expect(char *op, Token **rest){
     Token *token = *rest;
     if (token->kind != TK_RESERVED || strncmp(token->str, op, strlen(op)) != 0) {
-        error_at(token->str,"'%s'ではありません", op);
+        error_at(token->str, token->pos, "'%s'ではありません", op);
     }
     *rest = token->next;
 }
@@ -36,7 +36,7 @@ void expect(char *op, Token **rest){
 int expect_number(Token **rest){
     Token *token = *rest;
     if (token->kind != TK_NUM) {
-        error_at(token->str,"数ではありません");
+        error_at(token->str,token->pos, "数ではありません");
     }
     int val = token->val;
     *rest = token->next;
@@ -352,7 +352,7 @@ Node *primary(Token **rest) {
             consume("(", rest);
             ret->args = args(rest);
             if(ret->args->ireg > 6) {
-                error_at((*rest)->str, "引数が6個より多いです。\n");
+                error_at((*rest)->str, (*rest)->pos, "引数が6個より多いです。\n");
             }
             expect(")", rest);
             return ret;

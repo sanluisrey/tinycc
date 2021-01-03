@@ -11,10 +11,9 @@
 static char *user_input;
 
 // エラーを報告する
-void error_at(char *loc, char *fmt, ...) {
+void error_at(char *loc, int pos, char *fmt, ...) {
     fprintf(stderr,"%s\n", user_input);
-    int num = loc - user_input;
-    fprintf(stderr,"%*s",num,  " ");
+    fprintf(stderr,"%*s",pos,  " ");
     fprintf(stderr, "^ ");
     va_list ap;
     va_start(ap, fmt);
@@ -39,6 +38,7 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len){
     tok->str = q;
     tok->kind = kind;
     tok->len = len;
+    tok->pos = str - user_input;
     cur->next = tok;
     return tok;
 }
@@ -107,7 +107,7 @@ Token *tokenize(char *p){
             cur = new_token(TK_IDENT, cur, q, len);
             continue;
         }
-        error_at(p, "トークナイズできません");
+        error_at(p, p - user_input, "トークナイズできません");
     }
     new_token(TK_EOF, cur, p, 1);
     return head.next;

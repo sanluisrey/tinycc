@@ -38,6 +38,7 @@ struct Token {
     int val;        // kindがTK_NUMの場合、その数値
     char *str;      // トークン文字列
     int len;        // トークン文字列の長さ
+    int pos;        // 入力文字列でのトークン文字列の位置
 };
 
 // 入力文字列pをトークナイズしてそれを返す
@@ -133,8 +134,7 @@ void gen(Node *node);
 void codegen(Function *prog);
 
 // エラーメッセージ(汎用)出力
-// parse.c
-void error(char *fmt, ...);
-void error_at(char *loc, char *fmt, ...);
+// tokenizer.c
+void error_at(char *loc, int pos, char *fmt, ...);
 
 #endif /* tinycc_h */
