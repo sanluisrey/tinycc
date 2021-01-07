@@ -181,6 +181,9 @@ Function *program(Token **rest) {
 
 Node *stmt(Token **rest) {
     Node *ret;
+    while (consume(";", rest)) {
+        continue;
+    }
     if (consume_token(TK_RETURN, rest)) {
         Node *right = expr(rest);
         ret = new_node_binary(ND_RETURN, NULL, right);

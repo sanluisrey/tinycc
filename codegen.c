@@ -9,6 +9,8 @@
 
 // 関数呼び出しの引数に用いるレジスタ
 static char* MREGS[] = {"rdi", "rsi", "rdx", "rcx", "r8d", "r9d"};
+// スタックの深さ
+static int stackpos = 0;
 
 // エラーを報告する
 void error(char *fmt, ...) {
@@ -31,6 +33,22 @@ void assign_lvar_offset(Function *prog) {
         prog->stack_size = prog->locals->offset;
     }
 }
+// raxレジスタからRSPへのプッシュのコード生成
+static void push() {
+    printf("    push rax\n");
+    stackpos += 8;
+}
+// 即値からRSPへのプッシュのコード生成
+static void push_imm(int n) {
+    printf("    push %d\n", n);
+    stackpos += 8;
+}
+// RSPからのポップのコード生成
+static void pop(char *reg) {
+    printf("    pop %s\n", reg);
+    stackpos -= 8;
+    assert(stackpos >= 0);
+}
 
 // 式を左辺値として計算する。
 // ノードが変数を指す場合、変数のアドレスを計算し、スタックにプッシュする。
@@ -42,41 +60,40 @@ void gen_lval(Node *node){
     }
     printf("    mov rax, rbp\n");
     printf("    sub rax, %d\n", node->offset);
-    printf("    push rax\n");
+    push();
 }
 
 void gen(Node *node){
     switch (node->kind) {
         case ND_NUM:
-            printf("    push %d\n", node->val);
+            push_imm(node->val);
             return;
         case ND_LVAR:
             gen_lval(node);
-            printf("    pop rax\n");
+            pop("rax");
             printf("    mov rax, [rax]\n");
-            printf("    push rax\n");
+            push();
             return;
         case ND_ASGMT:
             gen_lval(node->left);
             gen(node->right);
-            printf("    pop rdi\n");
-            printf("    pop rax\n");
+            pop("rdi");
+            pop("rax");
             printf("    mov [rax], rdi\n");
-            printf("    push rdi\n");
+            printf("    mov rax, rdi\n");
+            push();//printf("    push rax\n");
             return;
         case ND_RETURN:
             gen(node->right);
-            printf("    pop rax\n");
-            //エピローグ
-            printf("    mov rsp, rbp\n");
-            printf("    pop rbp\n");
-            printf("    ret\n");
+            pop("rax");
+            push();
+            printf("    jmp .L.return\n");
             return;
         case ND_IF: {
             int c = count();
             gen(node->cond);
             // condの結果を0と比較し、0であればLelseラベルへジャンプ
-            printf("    pop rax\n");
+            pop("rax");
             printf("    cmp rax, 0\n");
             printf("    je .Lelse%d\n", c);
             // bodyのコード生成
@@ -100,7 +117,7 @@ void gen(Node *node){
             if (node->cond != NULL) {
                 gen(node->cond);
                 // condの結果を0と比較し、0でなければ.Lendラベルへジャンプ
-                printf("    pop rax\n");
+                pop("rax");
                 printf("    cmp rax, 0\n");
                 printf("    je .Lend%d\n", c);
             }
@@ -117,7 +134,7 @@ void gen(Node *node){
             printf(".Lbegin%d:\n", c);
             gen(node->cond);
             // condの結果を0と比較し、0でなければ.L3ラベルへジャンプ
-            printf("    pop rax\n");
+            pop("rax");
             printf("    cmp rax, 0\n");
             printf("    je .Lend%d\n", c);
             
@@ -133,7 +150,7 @@ void gen(Node *node){
                 node = node->next;
                 // TODO pop
                 if (node->next != NULL) {
-                    printf("    pop rax\n");
+                    pop("rax");
                 }
             }
             return;
@@ -142,7 +159,7 @@ void gen(Node *node){
             Node *args = node->args;
             while (args != NULL) {
                 gen(args);
-                printf("    pop rax\n");
+                pop("rax");
                 printf("    mov %s, rax\n", MREGS[args->ireg]);
                 args = args->next;
             }
@@ -152,8 +169,8 @@ void gen(Node *node){
     }
     gen(node->left);
     gen(node->right);
-    printf("    pop rdi\n");
-    printf("    pop rax\n");
+    pop("rdi");
+    pop("rax");
     switch (node->kind) {
         case ND_ADD:
             printf("    add rax, rdi\n");
@@ -191,7 +208,7 @@ void gen(Node *node){
             printf("    movzb rax, al\n");
             break;
     }
-    printf("    push rax\n");
+    push();
 }
 
 void codegen(Function *prog) {
@@ -201,17 +218,19 @@ void codegen(Function *prog) {
     printf("main:\n");
     // ローカル変数領域の確保
     assign_lvar_offset(prog);
-    printf("    push rbp\n");
+    printf("    mov rax, rbp\n");
+    push();
     printf("    mov rbp, rsp\n");
     printf("    sub rsp, %d\n", prog->stack_size);
     // コードの本体部分の出力
     for (Node *body = prog->code; body != NULL; body = body->next) {
         gen(body);
         // スタックから式の評価結果をポップする。
-        printf("    pop rax\n");
+        pop("rax");
     }
     //エピローグ
+    printf(".L.return:\n");
     printf("    mov rsp, rbp\n");
-    printf("    pop rbp\n");
+    pop("rbp");
     printf("    ret\n");
 }
