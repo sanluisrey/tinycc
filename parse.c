@@ -177,7 +177,10 @@ Node *new_node_funccall(Token *tok) {
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 // add        = mul ("+" mul | "-" mul)*
 // mul        = unary ("*" unary | "/" unary)*
-// unary      = ("+" | "-")? primary
+// unary      = "+"? primary
+//            | "-"? primary
+//            | "*" unary
+//            | "&" unary
 // primary    = num | ident ("("(args)? ")")? | "(" expr ")"
 // args       = expr ("," args )?
 Function *parse(Token **rest) {
@@ -369,6 +372,13 @@ Node *mul(Token **rest) {
 }
 
 Node *unary(Token **rest) {
+    if (consume("*",rest)) {
+        Node *right = unary(rest);
+        return new_node_binary(ND_DEREF, NULL, right);
+    } else if (consume("&",rest)) {
+        Node *right = unary(rest);
+        return new_node_binary(ND_ADDR, NULL, right);
+    }
     if (consume("+",rest)) {
         return primary(rest);
     } else if (consume("-",rest)) {
