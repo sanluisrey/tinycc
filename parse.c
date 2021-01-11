@@ -10,6 +10,19 @@
 // ローカル変数リスト
 static LVar *locals;
 
+// 生成規則
+static Function *program(Token **rest);
+static Node *stmt(Token **rest);
+static Node *expr(Token **rest);
+static Node *assign(Token **rest);
+static Node *equality(Token **rest);
+static Node *relational(Token **rest);
+static Node *add(Token **rest);
+static Node *mul(Token **rest);
+static Node *unary(Token **rest);
+static Node *primary(Token **rest);
+static Node *args(Token **rest);
+
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume(char *op, Token **rest){
@@ -150,6 +163,7 @@ Node *new_node_funccall(Token *tok) {
 }
 
 // 生成規則
+// Function   = Function | ident ("("(args)?")") "{" (program) "}"
 // program    = stmt*
 // stmt       = expr ";"
 //            | "{" stmt* "}"
@@ -166,11 +180,36 @@ Node *new_node_funccall(Token *tok) {
 // unary      = ("+" | "-")? primary
 // primary    = num | ident ("("(args)? ")")? | "(" expr ")"
 // args       = expr ("," args )?
+Function *parse(Token **rest) {
+    Function head = {};
+    Function *cur = &head;
+    while (!at_eof(*rest)) {
+        Token *tok = *rest;
+        if (tok->kind != TK_IDENT) {
+            error_at((*rest)->str, (*rest)->pos, "トップレベルで関数から始まっていません。");
+        }
+        char *name = tok->str;
+        *rest = tok->next;
+        Node *arg = NULL;
+        if (consume("(", rest)) {
+            arg = args(rest);
+            expect(")", rest);
+        }
+        expect("{", rest);
+        cur = cur->next = program(rest);
+        expect("}", rest);
+        cur->name = name;
+        cur->args = arg;
+    }
+    return head.next;
+}
+
 
 Function *program(Token **rest) {
     Node head = {};
     Node *cur = &head;
-    while (!at_eof(*rest)) {
+    locals = NULL;
+    while (!(((*rest)->len == 1 && strncmp((*rest)->str, "}", 1) == 0) || at_eof(*rest))) {
         cur = cur->next = stmt(rest);
     }
     Function *prog = calloc(1, sizeof(Function));
@@ -372,13 +411,16 @@ Node *args(Token **rest) {
     Token *tok = *rest;
     int ireg = 0;
     if (tok->len == 1 && strncmp(tok->str, ")", 1) == 0) {
-        return NULL;
+        Node *ret = calloc(1, sizeof(Node));
+        ret->ireg = 0;
+        return ret;
     }
     Node head;
     Node *args = &head;
     args->next = expr(rest);
     args = args->next;
-    args->ireg = ireg;
+    args->ireg = ++ireg;
+    args->name = tok->str;
     while (consume(",", rest)) {
         Node *new = expr(rest);
         new->next = head.next;

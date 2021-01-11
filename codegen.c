@@ -8,9 +8,11 @@
 #include "tinycc.h"
 
 // 関数呼び出しの引数に用いるレジスタ
-static char* MREGS[] = {"rdi", "rsi", "rdx", "rcx", "r8d", "r9d"};
+static char* MREGS[] = {"rdi", "rsi", "rdx", "rcx", "r8", "r9"};
 // スタックの深さ
 static int stackpos = 0;
+// 関数の戻り先のラベル
+static char *label;
 
 // エラーを報告する
 void error(char *fmt, ...) {
@@ -81,13 +83,13 @@ void gen(Node *node){
             pop("rax");
             printf("    mov [rax], rdi\n");
             printf("    mov rax, rdi\n");
-            push();//printf("    push rax\n");
+            push();
             return;
         case ND_RETURN:
             gen(node->right);
             pop("rax");
             push();
-            printf("    jmp .L.return\n");
+            printf("    jmp .%s.return\n", label);
             return;
         case ND_IF: {
             int c = count();
@@ -95,6 +97,7 @@ void gen(Node *node){
             // condの結果を0と比較し、0であればLelseラベルへジャンプ
             pop("rax");
             printf("    cmp rax, 0\n");
+            push();
             printf("    je .Lelse%d\n", c);
             // bodyのコード生成
             gen(node->body);
@@ -158,12 +161,17 @@ void gen(Node *node){
         case ND_FUNCCALL: {
             Node *args = node->args;
             while (args != NULL) {
+                if (args->ireg == 0) {
+                    args = args->next;
+                    continue;
+                }
                 gen(args);
                 pop("rax");
-                printf("    mov %s, rax\n", MREGS[args->ireg]);
+                printf("    mov %s, rax\n", MREGS[args->ireg - 1]);
                 args = args->next;
             }
             printf("    call %s\n", node->name);
+            push();
             return;
         }
     }
@@ -215,22 +223,53 @@ void codegen(Function *prog) {
     // アセンブリの前半部分の出力
     printf(".intel_syntax noprefix\n");
     printf(".global main\n");
-    printf("main:\n");
-    // ローカル変数領域の確保
-    assign_lvar_offset(prog);
-    printf("    mov rax, rbp\n");
-    push();
-    printf("    mov rbp, rsp\n");
-    printf("    sub rsp, %d\n", prog->stack_size);
-    // コードの本体部分の出力
-    for (Node *body = prog->code; body != NULL; body = body->next) {
-        gen(body);
-        // スタックから式の評価結果をポップする。
-        pop("rax");
+    for (Function *func = prog; func != NULL; func = func->next) {
+        int ireg = func->args->ireg;
+        printf("%s:\n", func->name);
+        printf("    mov rax, rbp\n");
+        push();
+        printf("    mov rbp, rsp\n");
+        printf("    sub rsp, %d\n", ireg*8);
+        for (Node *arg = func->args; arg; arg = arg->next) {
+            if (!arg->ireg) {
+                continue;
+            }
+            printf("    mov rax, rbp\n");
+            printf("    sub rax, %d\n", (arg->ireg)*8);
+            printf("    mov [rax], %s\n", MREGS[arg->ireg - 1]);
+        }
+        // ローカル変数領域の確保
+        for (LVar *lvar = func->locals; lvar != NULL; lvar = lvar->next) {
+            Node *loc = NULL;
+            for (Node *arg = func->args; arg; arg = arg->next) {
+                if (arg->name == NULL) {
+                    continue;
+                }
+                if (!strncmp(arg->name, lvar->str, lvar->len) && strlen(arg->name) == lvar->len) {
+                    loc = arg;
+                    break;
+                }
+            }
+            if (loc != NULL) {
+                lvar->offset = (loc->ireg)*8;
+            } else {
+                lvar->offset += ireg * 8;
+                func->stack_size += 8;
+            }
+        }
+        printf("    sub rsp, %d\n", func->stack_size);
+        
+        // コードの本体部分の出力
+        label = func->name;
+        for (Node *body = func->code; body != NULL; body = body->next) {
+            gen(body);
+            // スタックから式の評価結果をポップする。
+            pop("rax");
+        }
+        //エピローグ
+        printf(".%s.return:\n", label);
+        printf("    mov rsp, rbp\n");
+        pop("rbp");
+        printf("    ret\n");
     }
-    //エピローグ
-    printf(".L.return:\n");
-    printf("    mov rsp, rbp\n");
-    pop("rbp");
-    printf("    ret\n");
 }

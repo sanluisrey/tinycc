@@ -18,7 +18,7 @@ int main(int argc, char **argv){
     token = tokenize(argv[1]);
     
     // 抽象構文木の作成
-    Function *prog = program(&token);
+    Function *prog = parse(&token);
     
     // コード生成
     codegen(prog);

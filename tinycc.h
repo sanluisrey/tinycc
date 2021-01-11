@@ -108,22 +108,14 @@ struct Function {
     Node *code;
     LVar *locals;
     int stack_size;
+    char *name;
+    Function *next;
+    Node *args;
 };
 
-
-// 生成規則
+// パーサー
 // parse.c
-Function *program(Token **rest);
-Node *stmt(Token **rest);
-Node *expr(Token **rest);
-Node *assign(Token **rest);
-Node *equality(Token **rest);
-Node *relational(Token **rest);
-Node *add(Token **rest);
-Node *mul(Token **rest);
-Node *unary(Token **rest);
-Node *primary(Token **rest);
-Node *args(Token **rest);
+Function *parse(Token **rest);
 
 // 抽象構文木の配列
 extern Node *code[100];
