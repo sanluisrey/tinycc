@@ -29,12 +29,6 @@ int count(void) {
     return i++;
 }
 
-void assign_lvar_offset(Function *prog) {
-    prog->stack_size = 0;
-    if (prog->locals != NULL) {
-        prog->stack_size = prog->locals->offset;
-    }
-}
 // raxレジスタからRSPへのプッシュのコード生成
 static void push() {
     printf("    push rax\n");
@@ -157,11 +151,12 @@ void gen(Node *node){
             return;
         }
         case ND_BLOCK: {
-            while (node->next != NULL) {
-                gen(node->next);
+            node = node->right;
+            while (node != NULL) {
+                gen(node);
                 node = node->next;
                 // TODO pop
-                if (node->next != NULL) {
+                if (node != NULL) {
                     pop("rax");
                 }
             }
@@ -233,39 +228,17 @@ void codegen(Function *prog) {
     printf(".intel_syntax noprefix\n");
     printf(".global main\n");
     for (Function *func = prog; func != NULL; func = func->next) {
-        int ireg = func->args->ireg;
+        int ireg = func->nparams;
         printf("%s:\n", func->name);
         printf("    mov rax, rbp\n");
         push();
         printf("    mov rbp, rsp\n");
-        printf("    sub rsp, %d\n", ireg*8);
         for (Node *arg = func->args; arg; arg = arg->next) {
-            if (!arg->ireg) {
-                continue;
-            }
             printf("    mov rax, rbp\n");
             printf("    sub rax, %d\n", (arg->ireg)*8);
             printf("    mov [rax], %s\n", MREGS[arg->ireg - 1]);
         }
         // ローカル変数領域の確保
-        for (LVar *lvar = func->locals; lvar != NULL; lvar = lvar->next) {
-            Node *loc = NULL;
-            for (Node *arg = func->args; arg; arg = arg->next) {
-                if (arg->name == NULL) {
-                    continue;
-                }
-                if (!strncmp(arg->name, lvar->str, lvar->len) && strlen(arg->name) == lvar->len) {
-                    loc = arg;
-                    break;
-                }
-            }
-            if (loc != NULL) {
-                lvar->offset = (loc->ireg)*8;
-            } else {
-                lvar->offset += ireg * 8;
-                func->stack_size += 8;
-            }
-        }
         printf("    sub rsp, %d\n", func->stack_size);
         
         // コードの本体部分の出力

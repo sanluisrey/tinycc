@@ -27,6 +27,7 @@ typedef enum {
     TK_ELSE,        // else
     TK_FOR,         // for loop
     TK_WHILE,       // while
+    TK_TYPE,        // 型
 } TokenKind;
 
 typedef struct Token Token;
@@ -50,7 +51,8 @@ typedef struct LVar LVar;
 struct LVar {
     char *str;      // ローカル変数の文字列
     int len;        // 文字列の長さ
-    int offset; // RBPからのオフセット
+    int offset;     // RBPからのオフセット
+    bool used;
     LVar *next;     // 次に定義されたローカル変数へのポインタ
 };
 
@@ -113,11 +115,13 @@ struct Function {
     char *name;
     Function *next;
     Node *args;
+    int nparams;
 };
 
 // パーサー
 // parse.c
 Function *parse(Token **rest);
+Function *program(Token **rest);
 
 // 抽象構文木の配列
 extern Node *code[100];

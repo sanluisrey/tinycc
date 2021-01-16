@@ -7,11 +7,29 @@
 
 #include "tinycc.h"
 
+// 現在のパースしている関数
+static Function *prog;
 // ローカル変数リスト
 static LVar *locals;
 
-// 生成規則
-static Function *program(Token **rest);
+// 関数のスタック領域のサイズ
+static int stack_size;
+
+// 抽象構文木の部分木のヘッダー
+static Node head;
+
+// 抽象構文木の部分木の末尾
+static Node* tail;
+
+// パーサーの宣言
+static Node *glbl_decl(Token **rest);
+static void decl(Token **rest);
+static Function *f_head(Token **rest);
+static Node *p_list(Token **rest, int depth);
+static Node *p_decl(Token **rest);
+static Function *func_def(Token **rest);
+static void decl_list(Token **rest, int depth);
+static Node *stmt_list(Token **rest);
 static Node *stmt(Token **rest);
 static Node *expr(Token **rest);
 static Node *assign(Token **rest);
@@ -22,6 +40,14 @@ static Node *mul(Token **rest);
 static Node *unary(Token **rest);
 static Node *primary(Token **rest);
 static Node *args(Token **rest);
+static Node *arg_list(Token **rest, int depth);
+
+// 次のトークンが引数の記号と等しいかどうか真偽を返す。
+bool equal(char *op, Token **rest) {
+    Token *token = *rest;
+    if(token->len != strlen(op)) return false;
+    return strncmp(token->str, op, strlen(op)) == 0;
+}
 
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
@@ -56,17 +82,73 @@ int expect_number(Token **rest){
     return val;
 }
 
-// 変数を名前で検索する。見つからなかった場合はNULLを返す。
+// 変数を名前で検索する。見つからなかった場合はエラー処理。
 LVar *find_lvar(Token *tok) {
-    for (LVar *cur = locals; cur != NULL; cur = cur->next) {
+    LVar *cur = NULL;
+    int i = 0;
+    for (cur = locals; cur != NULL; cur = cur->next, i++) {
         if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
-            return cur;
+            break;
         }
     }
-    return NULL;
+    if (cur == NULL) {
+        error_at(tok->str, tok->pos, "Undeclared identifier used");
+    }
+    if (!cur->used) {
+        stack_size += 8;
+        cur->offset = stack_size;
+        cur->used = true;
+    }
+    return cur;
 }
 
-// 次のトークンの種類がTK_IDENTの時には、ローカル変数リストを更新後、トークンを一つ読み進めて
+// 変数リストへの登録
+void lvarDecl(Token *tok){
+    LVar *cur = NULL;
+    for (cur = locals; cur != NULL; cur = cur->next) {
+        if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
+            error_at(tok->str, tok->pos, "Duplicated declaration");
+        }
+    }
+    if (locals == NULL) {
+        locals = calloc(1, sizeof(LVar));
+        locals->str = tok->str;
+        locals->len = tok->len;
+    } else {
+        LVar *new = calloc(1, sizeof(LVar));
+        new->len = tok->len;
+        new->str = tok->str;
+        new->next = locals;
+        locals = new;
+    }
+}
+
+// 仮引数の変数リストへの登録
+void pvarDecl(Node *args, Token *tok) {
+    LVar *cur = NULL;
+    for (cur = locals; cur != NULL; cur = cur->next) {
+        if (strlen(args->name) == cur->len && strncmp(args->name, cur->str, cur->len) == 0) {
+            error_at(tok->str, tok->pos, "Duplicated declaration");
+        }
+    }
+    if (locals == NULL) {
+        locals = calloc(1, sizeof(LVar));
+        locals->str = args->name;
+        locals->len = strlen(args->name);
+        locals->offset = args->ireg * 8;
+        locals->used = true;
+    } else {
+        LVar *new = calloc(1, sizeof(LVar));
+        new->len = strlen(args->name);
+        new->str = args->name;
+        new->offset = args->ireg * 8;
+        new->used = true;
+        new->next = locals;
+        locals = new;
+    }
+}
+
+// 次のトークンの種類がTK_IDENTの時には、ローカル変数リストを検索し、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume_ident(Token **rest, int *offset) {
     Token *token = *rest;
@@ -74,15 +156,6 @@ bool consume_ident(Token **rest, int *offset) {
         return false;
     }
     LVar *lvar = find_lvar(token);
-    if (lvar == NULL) {
-        lvar = calloc(1, sizeof(LVar));
-        lvar->str = token->str;
-        lvar->len = token->len;
-        int base = locals != NULL ? locals->offset : 0;
-        lvar->offset = base + 8;
-        lvar->next = locals;
-        locals = lvar;
-    }
     *offset = lvar->offset;
     *rest = token->next;
     return true;
@@ -162,11 +235,28 @@ Node *new_node_funccall(Token *tok) {
     return ret;
 }
 
-// 生成規則
-// Function   = Function | ident ("("(args)?")") "{" (program) "}"
-// program    = stmt*
-// stmt       = expr ";"
-//            | "{" stmt* "}"
+// 生成規則(TODO)
+// program    = glbl_decl
+// glbl_decl  =
+//            = glbl_decl func_def
+// decl       = type ident
+//            | type f_head
+//            | decl "," ident
+//            | decl "," f_head
+// f_head     = ident "(" p_list ")"
+// p_list     =
+//            | p_decl
+//            | p_list ',' p_decl
+// p_decl     = type ident ";"
+// func_def   = type f_head "{"
+//                  decl_list
+//                  st_list "}"
+// block      = "{" decl_list st_list "}"
+// decl_list  =
+//            | decl_list decl ';'
+// st_list    = stmt*
+// stmt       = block
+//            | expr ";"
 //            | "if" "(" expr ")" stmt ("else" stmt)?
 //            | "while" "(" expr ")" stmt
 //            | "for" "(" expr? ";" expr? ";" expr? ")" stmt
@@ -181,44 +271,125 @@ Node *new_node_funccall(Token *tok) {
 //            | "-"? primary
 //            | "*" unary
 //            | "&" unary
-// primary    = num | ident ("("(args)? ")")? | "(" expr ")"
-// args       = expr ("," args )?
-Function *parse(Token **rest) {
-    Function head = {};
-    Function *cur = &head;
+// primary    = "(" expr ")" | ident "(" arg_list ")" | num
+// arg_list   =
+//            | expr
+//            | arg_list "," expr
+
+
+Function *program(Token **rest) {
+    Function head;
+    prog = &head;
     while (!at_eof(*rest)) {
-        Token *tok = *rest;
-        if (tok->kind != TK_IDENT) {
-            error_at((*rest)->str, (*rest)->pos, "トップレベルで関数から始まっていません。");
-        }
-        char *name = tok->str;
-        *rest = tok->next;
-        Node *arg = NULL;
-        if (consume("(", rest)) {
-            arg = args(rest);
-            expect(")", rest);
-        }
-        expect("{", rest);
-        cur = cur->next = program(rest);
-        expect("}", rest);
-        cur->name = name;
-        cur->args = arg;
+        prog = prog->next = func_def(rest);
     }
     return head.next;
 }
 
+void decl(Token **rest){
+    consume_token(TK_TYPE,rest);
+    Token *tok = *rest;
+    lvarDecl(tok);
+    *rest = tok->next;
+};
 
-Function *program(Token **rest) {
-    Node head = {};
-    Node *cur = &head;
+Function *f_head(Token **rest){
+    Token *tok = *rest;
+    if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
+    Function *ret = calloc(1, sizeof(Function));
+    ret->name = tok->str;
+    consume_token(TK_IDENT, rest);
+    tok = *rest;
+    expect("(", rest);
+    Node *args = p_list(rest, 0);
+    ret->args = args;
+    if(args != NULL) ret->nparams = args->ireg;
+    expect(")", rest);
+    return ret;
+};
+
+Node *p_list(Token **rest, int depth){
+    if(equal(")", rest)) return NULL;
+    if(depth) expect(",", rest);
+    Token *tok = *rest;
+    p_decl(rest);
+    Node *car, *cdr;
+    cdr = p_list(rest, depth + 1);
+    car = p_decl(&tok);
+    car->ireg = depth + 1;
+    pvarDecl(car, tok);
+    if(cdr == NULL) head.next = car;
+    else cdr->next = car;
+    if(!depth) return head.next;
+    return car;
+};
+
+Node *p_decl(Token **rest){
+    consume_token(TK_TYPE, rest);
+    Token *tok = *rest;
+    if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
+    Node *var = calloc(1, sizeof(Node));
+    var->name = tok->str;
+    *rest = tok->next;
+    return var;
+};
+
+Function *func_def(Token **rest){
+    Token *tok = *rest;
+    if (tok->kind != TK_TYPE) error_at(tok->str, tok->pos, "型がありません。");
+    consume_token(TK_TYPE, rest);
     locals = NULL;
-    while (!(((*rest)->len == 1 && strncmp((*rest)->str, "}", 1) == 0) || at_eof(*rest))) {
-        cur = cur->next = stmt(rest);
+    Function *ret = f_head(rest);
+    expect("{", rest);
+    Node head;
+    Node *cur = &head;
+    stack_size = ret->nparams * 8;
+    while (!consume("}", rest)) {
+        Token *tok = *rest;
+        if(at_eof(tok)) error_at(tok->str, tok->pos, "'}'がありません。");
+        decl_list(rest, 0);
+        cur->next = stmt_list(rest);
+        cur = tail;
     }
-    Function *prog = calloc(1, sizeof(Function));
-    prog->code = head.next;
-    prog->locals = locals;
-    return prog;
+    ret->code = head.next;
+    ret->locals = locals;
+    ret->stack_size = stack_size;
+    return ret;
+};
+
+Node *block(Token **rest){
+    expect("{", rest);
+    Node *cur = &head;
+    while (!consume("}", rest)) {
+        Token *tok = *rest;
+        if(at_eof(tok)) error_at(tok->str, tok->pos, "'}'がありません。");
+        decl_list(rest, 0);
+        cur->next = stmt_list(rest);
+        cur = tail;
+    }
+    return head.next;
+}
+
+void decl_list(Token **rest, int depth) {
+    Token *tok = *rest;
+    if (tok->kind != TK_TYPE) return;
+    if(at_eof(tok)) error_at(tok->str, tok->pos, "';'がありません。");
+    decl(rest);
+    expect(";", rest);
+    decl_list(rest, depth + 1);
+    return;
+}
+
+Node *stmt_list(Token **rest) {
+    Token *tok = *rest;
+    if (at_eof(tok) || tok->kind == TK_TYPE || equal("}", rest)) {
+        return NULL;
+    }
+    Node *car = stmt(rest);
+    Node *cdr = stmt_list(rest);
+    if(cdr == NULL) tail = car;
+    car->next = cdr;
+    return car;
 }
 
 Node *stmt(Token **rest) {
@@ -226,7 +397,12 @@ Node *stmt(Token **rest) {
     while (consume(";", rest)) {
         continue;
     }
-    if (consume_token(TK_RETURN, rest)) {
+    if(equal("{", rest)) {
+        ret = calloc(1, sizeof(Node));
+        ret->kind = ND_BLOCK;
+        ret->right = block(rest);
+        return ret;
+    } else if (consume_token(TK_RETURN, rest)) {
         Node *right = expr(rest);
         ret = new_node_binary(ND_RETURN, NULL, right);
     } else if (consume_token(TK_IF, rest)) {
@@ -267,21 +443,6 @@ Node *stmt(Token **rest) {
         expect(")", rest);
         Node *body = stmt(rest);
         ret = new_node_while(cond, body);
-        return ret;
-    } else if(consume("{", rest)) {
-        Node *ret = calloc(1, sizeof(Node));
-        Node *cur = calloc(1, sizeof(Node));
-        ret->next = NULL;
-        ret->kind = ND_BLOCK;
-        ret->next = stmt(rest);
-        cur = ret->next;
-        while (!consume("}", rest)) {
-            if (at_eof(*rest)) {
-                expect("}", rest);
-            }
-            cur->next = stmt(rest);
-            cur = cur->next;
-        }
         return ret;
     } else {
         ret = expr(rest);
@@ -402,8 +563,9 @@ Node *primary(Token **rest) {
             Node *ret = new_node_funccall(*rest);
             consume_token(TK_IDENT, rest);
             consume("(", rest);
-            ret->args = args(rest);
-            if(ret->args->ireg > 6) {
+            ret->args = arg_list(rest, 0);
+            //ret->args = args(rest);
+            if(ret->args != NULL && ret->args->ireg > 6) {
                 error_at((*rest)->str, (*rest)->pos, "引数が6個より多いです。\n");
             }
             expect(")", rest);
@@ -417,25 +579,25 @@ Node *primary(Token **rest) {
     return new_node_num(expect_number(rest));
 }
 
-Node *args(Token **rest) {
+Node *arg_list(Token **rest, int depth){
     Token *tok = *rest;
-    int ireg = 0;
-    if (tok->len == 1 && strncmp(tok->str, ")", 1) == 0) {
-        Node *ret = calloc(1, sizeof(Node));
-        ret->ireg = 0;
+    if (tok->len == 1 && strncmp(tok->str, ")", 1) == 0) return NULL;
+    if (strncmp(tok->next->str, ",", 1)) {
+        Node *ret = &head;
+        ret->next = expr(rest);
+        ret = ret->next;
+        ret->ireg = ++depth;
+        ret->name = tok->str;
         return ret;
     }
-    Node head;
-    Node *args = &head;
-    args->next = expr(rest);
-    args = args->next;
-    args->ireg = ++ireg;
-    args->name = tok->str;
-    while (consume(",", rest)) {
-        Node *new = expr(rest);
-        new->next = head.next;
-        head.next = new;
-        new->ireg = ++ireg;
+    Node *pre = expr(rest);
+    pre->ireg = depth + 1;
+    pre->name = tok->str;
+    expect(",", rest);
+    Node *post = arg_list(rest, depth + 1);
+    post->next = pre;
+    if (depth) {
+        return pre;
     }
     return head.next;
 }

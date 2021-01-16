@@ -98,6 +98,11 @@ Token *tokenize(char *p){
             p += 5;
             continue;
         }
+        if (strncmp(p, "int", 3) == 0 && !is_alnum(p[3])) {
+            cur = new_token(TK_TYPE, cur, p, 3);
+            p += 3;
+            continue;
+        }
         if (isalpha(*p)) {
             char *q = p++;
             while (is_alnum(*p)) {
