@@ -149,5 +149,21 @@ y = 5;
 z = &y + 8;
 return *z;}'
 
+assert 3 'int main(){
+int x;
+int *y;
+y = &x;
+*y = 3;
+return *y;
+}'
+
+assert 3 'int main(){
+int x;
+int *y;
+y = &x;
+*y = 3;
+return x;
+}'
+
 echo OK
 

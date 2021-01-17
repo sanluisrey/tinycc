@@ -46,6 +46,14 @@ struct Token {
 // tokenizer.c
 Token *tokenize(char *p);
 
+// 型
+typedef struct Type Type;
+
+struct Type {
+    enum { INT, PTR} ty;
+    struct Type *ptr_to;    // 型リスト
+};
+
 typedef struct LVar LVar;
 
 struct LVar {
@@ -54,6 +62,7 @@ struct LVar {
     int offset;     // RBPからのオフセット
     bool used;
     LVar *next;     // 次に定義されたローカル変数へのポインタ
+    Type *type;      // ローカル変数の型
 };
 
 // 抽象構文木のノードの種類
@@ -103,6 +112,8 @@ struct Node {
     Node *next;     // block内の構文の連結リスト
     Node *args;     // 関数呼び出しの引数
     int ireg;       // 関数呼び出しの引数の順序
+    
+    Type *type;     // 仮引数の型
 };
 
 // プログラム全体を表す

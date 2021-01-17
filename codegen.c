@@ -50,6 +50,13 @@ static void pop(char *reg) {
 // ノードが変数を指す場合、変数のアドレスを計算し、スタックにプッシュする。
 // それ以外の場合、エラーを表示する。
 void gen_lval(Node *node){
+    if (node->kind == ND_DEREF) {
+        gen_lval(node->right);
+        pop("rax");
+        printf("    mov rax, [rax]\n");
+        push();
+        return;
+    }
     if (node->kind != ND_LVAR) {
         error("変数が左辺値ではありません。");
         return;
@@ -247,6 +254,7 @@ void codegen(Function *prog) {
             gen(body);
             // スタックから式の評価結果をポップする。
             pop("rax");
+            printf("\n");
         }
         //エピローグ
         printf(".%s.return:\n", label);

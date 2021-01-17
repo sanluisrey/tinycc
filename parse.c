@@ -23,6 +23,7 @@ static Node* tail;
 
 // パーサーの宣言
 static Node *glbl_decl(Token **rest);
+static Type *type_prim(Token **rest);
 static void decl(Token **rest);
 static Function *f_head(Token **rest);
 static Node *p_list(Token **rest, int depth);
@@ -103,7 +104,7 @@ LVar *find_lvar(Token *tok) {
 }
 
 // 変数リストへの登録
-void lvarDecl(Token *tok){
+void lvarDecl(Token *tok, Type *type){
     LVar *cur = NULL;
     for (cur = locals; cur != NULL; cur = cur->next) {
         if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
@@ -114,13 +115,27 @@ void lvarDecl(Token *tok){
         locals = calloc(1, sizeof(LVar));
         locals->str = tok->str;
         locals->len = tok->len;
+        locals->type = type;
     } else {
         LVar *new = calloc(1, sizeof(LVar));
         new->len = tok->len;
         new->str = tok->str;
         new->next = locals;
+        new->type = type;
         locals = new;
     }
+}
+
+// 1次型式のパース
+Type *RefType(Token **rest) {
+    Token *tok = *rest;
+    Type *ret = calloc(1, sizeof(Type));
+    if(strncmp(tok->str, "*", 1) == 0) {
+        ret->ty = PTR;
+        *rest = tok->next;
+        ret->ptr_to = RefType(rest);
+    }
+    return ret;
 }
 
 // 仮引数の変数リストへの登録
@@ -137,6 +152,7 @@ void pvarDecl(Node *args, Token *tok) {
         locals->len = strlen(args->name);
         locals->offset = args->ireg * 8;
         locals->used = true;
+        locals->type = args->type;
     } else {
         LVar *new = calloc(1, sizeof(LVar));
         new->len = strlen(args->name);
@@ -144,6 +160,7 @@ void pvarDecl(Node *args, Token *tok) {
         new->offset = args->ireg * 8;
         new->used = true;
         new->next = locals;
+        new->type = args->type;
         locals = new;
     }
 }
@@ -239,15 +256,18 @@ Node *new_node_funccall(Token *tok) {
 // program    = glbl_decl
 // glbl_decl  =
 //            = glbl_decl func_def
-// decl       = type ident
-//            | type f_head
-//            | decl "," ident
-//            | decl "," f_head
+// type_expr  = type_prim
+// type_prim  = type
+//            = type_prim '*'
+// decl       = type_expr ident
+//            | type f_head (TODO)
+//            | decl "," ident (TODO)
+//            | decl "," f_head (TODO)
 // f_head     = ident "(" p_list ")"
 // p_list     =
 //            | p_decl
 //            | p_list ',' p_decl
-// p_decl     = type ident ";"
+// p_decl     = type_expr ident ";"
 // func_def   = type f_head "{"
 //                  decl_list
 //                  st_list "}"
@@ -286,10 +306,15 @@ Function *program(Token **rest) {
     return head.next;
 }
 
+Type *type_prim(Token **rest){
+    return RefType(rest);
+};
+
 void decl(Token **rest){
     consume_token(TK_TYPE,rest);
+    Type *type = type_prim(rest);
     Token *tok = *rest;
-    lvarDecl(tok);
+    lvarDecl(tok, type);
     *rest = tok->next;
 };
 
@@ -326,10 +351,12 @@ Node *p_list(Token **rest, int depth){
 
 Node *p_decl(Token **rest){
     consume_token(TK_TYPE, rest);
+    Type *type = type_prim(rest);
     Token *tok = *rest;
     if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
     Node *var = calloc(1, sizeof(Node));
     var->name = tok->str;
+    var->type = type;
     *rest = tok->next;
     return var;
 };
