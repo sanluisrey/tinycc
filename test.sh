@@ -150,14 +150,6 @@ assert 1 'int main() { return sub2(4,3); } int sub2(int x, int y) { return x-y; 
 assert 55 'int main() { return fib(9); } int fib(int x) { if (x<=1) return 1; return fib(x-1) + fib(x-2); }'
 
 # addr and deref
-assert 3 'int main(){int x; int y;x = 3;
-y = &x;
-return *y;}'
-assert 3 'int main(){int x;int y; int z;x = 3;
-y = 5;
-z = &y + 8;
-return *z;}'
-
 assert 3 'int main(){
 int x;
 int *y;
@@ -190,6 +182,46 @@ alloc4(&p, 1, 2, 4, 8);
 q = p + 2;
 q = p + 3;
 return *q + 5;}'
+
+#sizeof
+assert 4 '
+int main(){
+return sizeof(1);
+}'
+assert 4 '
+int main(){
+int x;
+return sizeof(x);
+}'
+assert 8 '
+int main(){
+int *x;
+return sizeof(x);
+}'
+assert 4 '
+int main(){
+int x;
+return sizeof(x+3);
+}'
+assert 8 '
+int main(){
+int *y;
+return sizeof(y+3);
+}'
+assert 4 '
+int main(){
+int *y;
+return sizeof(*y);
+}'
+assert 8 '
+int main(){
+int x;
+return sizeof(&x);
+}'
+assert 4 '
+int main(){
+return sizeof(sizeof(1));
+}'
 
 echo OK
 

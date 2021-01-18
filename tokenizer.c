@@ -103,6 +103,11 @@ Token *tokenize(char *p){
             p += 3;
             continue;
         }
+        if (strncmp(p, "sizeof", 6) == 0 && !is_alnum(p[6])) {
+            cur = new_token(TK_SIZEOF, cur, p, 6);
+            p += 6;
+            continue;
+        }
         if (isalpha(*p)) {
             char *q = p++;
             while (is_alnum(*p)) {

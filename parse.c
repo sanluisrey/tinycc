@@ -209,13 +209,16 @@ Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
     ret->kind = kind;
     ret->left = lhs;
     ret->right = rhs;
+    ret->type = calloc(1, sizeof(Type));
     return ret;
 }
 
 Node *new_node_num(int val){
     Node *ret = calloc(1, sizeof(Node));
+    Type *type = calloc(1, sizeof(Type));
     ret->kind = ND_NUM;
     ret->val = val;
+    ret->type = type;
     return ret;
 }
 
@@ -277,7 +280,7 @@ Node *new_node_funccall(Token *tok) {
 //            | p_decl
 //            | p_list ',' p_decl
 // p_decl     = type_expr ident ";"
-// func_def   = type f_head "{"
+// func_def   = type f_head "{"     //TODO 型
 //                  decl_list
 //                  st_list "}"
 // block      = "{" decl_list st_list "}"
@@ -290,13 +293,14 @@ Node *new_node_funccall(Token *tok) {
 //            | "while" "(" expr ")" stmt
 //            | "for" "(" expr? ";" expr? ";" expr? ")" stmt
 //            | "return" expr ";"
-// expr       = assign
+// expr       = assign  // TODO 型
 // assign     = equality ("=" assign)?
 // equality   = relational ("==" relational | "!=" relational)*
 // relational = add ("<" add | "<=" add | ">" add | ">=" add)*
 // add        = mul ("+" mul | "-" mul)*
 // mul        = unary ("*" unary | "/" unary)*
-// unary      = "+"? primary
+// unary      = "sizeof" unary
+//            | "+"? primary
 //            | "-"? primary
 //            | "*" unary
 //            | "&" unary
@@ -492,10 +496,13 @@ Node *expr(Token **rest) {
 };
 
 Node *assign(Token **rest) {
+    Node *ret;
     Node *left = equality(rest);
     if (consume("=",rest)) {
         Node *right = assign(rest);
-        return new_node_binary(ND_ASGMT, left, right);
+        ret = new_node_binary(ND_ASGMT, left, right);
+        ret->type = left->type;
+        return ret;
     }
     return left;
 }
@@ -507,9 +514,11 @@ Node *equality(Token **rest) {
         if (consume("==", rest)) {
             Node *right = relational(rest);
             ret = new_node_binary(ND_EQ, ret, right);
+            ret->type = calloc(1, sizeof(Type));
         } else if (consume("!=", rest)) {
             Node *right = relational(rest);
             ret = new_node_binary(ND_NE, ret, right);
+            ret->type = calloc(1, sizeof(Type));
         } else {
             return ret;
         }
@@ -521,15 +530,19 @@ Node *relational(Token **rest) {
         if (consume(">=", rest)) {
             Node *left = add(rest);
             ret = new_node_binary(ND_GE, left, ret);
+            ret->type = calloc(1, sizeof(Type));
         } else if (consume("<=", rest)) {
             Node *right = add(rest);
             ret = new_node_binary(ND_LE, ret, right);
+            ret->type = calloc(1, sizeof(Type));
         } else if (consume(">", rest)){
             Node *left = add(rest);
             ret = new_node_binary(ND_GT, left, ret);
+            ret->type = calloc(1, sizeof(Type));
         } else if (consume("<", rest)) {
             Node *right = add(rest);
             ret = new_node_binary(ND_LT, ret, right);
+            ret->type = calloc(1, sizeof(Type));
         } else {
             return ret;
         }
@@ -539,13 +552,16 @@ Node *relational(Token **rest) {
 Node *add(Token **rest) {
     Node *left = mul(rest);
     Node *ret = left;
+    Type *type = ret->type;
     for (; ; ) {
         if (consume("+", rest)) {
             Node *right = mul(rest);
             ret = new_node_binary(ND_ADD, ret, right);
+            ret->type = type->ty ? type : right->type;      //TODO type check
         } else if (consume("-", rest)){
             Node *right = mul(rest);
             ret = new_node_binary(ND_SUB, ret, right);
+            ret->type = type->ty ? type : right->type;      //TODO type check
         } else {
             return ret;
         }
@@ -559,9 +575,11 @@ Node *mul(Token **rest) {
         if (consume("*", rest)) {
             Node *right = unary(rest);
             ret = new_node_binary(ND_MUL, ret, right);
+            ret->type = right->type;                        //TODO type check
         } else if (consume("/", rest)){
             Node *right = unary(rest);
             ret = new_node_binary(ND_DIV, ret, right);
+            ret->type = right->type;                        //TODO type check
         } else {
             return ret;
         }
@@ -569,18 +587,39 @@ Node *mul(Token **rest) {
 }
 
 Node *unary(Token **rest) {
-    if (consume("*",rest)) {
+    Node *ret;
+    if (consume_token(TK_SIZEOF, rest)) {
         Node *right = unary(rest);
-        return new_node_binary(ND_DEREF, NULL, right);
+        int type_size = (right->type->ty)*4 + 4;
+        if (right->kind == ND_MUL) {
+            type_size *= right->val;
+        }
+        if (right->kind == ND_DIV) {
+            type_size /= right->val;
+        }
+        ret = new_node_num(type_size);
+        return ret;
+    } else if (consume("*",rest)) {
+        Node *right = unary(rest);
+        ret = new_node_binary(ND_DEREF, NULL, right);
+        if(!right->type->ty) error_at((*rest)->str, (*rest)->pos, "ポインタ型ではありません。");
+        ret->type = right->type->ptr_to;
+        return ret;
     } else if (consume("&",rest)) {
         Node *right = unary(rest);
-        return new_node_binary(ND_ADDR, NULL, right);
+        ret = new_node_binary(ND_ADDR, NULL, right);
+        ret->type->ty = PTR;
+        ret->type->ptr_to = right->type;
+        return ret;
     }
     if (consume("+",rest)) {
         return primary(rest);
     } else if (consume("-",rest)) {
         Node *right = primary(rest);
-        return new_node_binary(ND_SUB, new_node_num(0), right);
+        ret = new_node_binary(ND_SUB, new_node_num(0), right);
+        if(right->type->ty) error_at((*rest)->str, (*rest)->pos, "int型ではありません。");
+        ret->type = right->type;
+        return ret;
     }
     return primary(rest);
 }
@@ -596,7 +635,8 @@ Node *primary(Token **rest) {
     if (tok->kind == TK_IDENT) {
         tok = tok->next;
         if (tok->len == 1 && strncmp(tok->str, "(", 1) == 0) {
-            Node *ret = new_node_funccall(*rest);
+            Node *ret = new_node_funccall(*rest);       // TODO register return type
+            ret->type = calloc(1, sizeof(Type));
             consume_token(TK_IDENT, rest);
             consume("(", rest);
             ret->args = arg_list(rest, 0);
@@ -613,10 +653,6 @@ Node *primary(Token **rest) {
         ret->type = lvar->type;
         consume_token(TK_IDENT, rest);
         return ret;
-        //int *offset = calloc(1, sizeof(int));
-        //if (consume_ident(rest, offset)) {
-        //    return new_node_lvar(*offset);
-        //}
     }
     return new_node_num(expect_number(rest));
 }
@@ -641,22 +677,4 @@ Node *arg_list(Token **rest, int depth){
     cdr->next = car;
     if(depth) return car;
     return head.next;
-    /*if (strncmp(tok->next->str, ",", 1)) {
-        Node *ret = &head;
-        ret->next = expr(rest);
-        ret = ret->next;
-        ret->ireg = ++depth;
-        ret->name = tok->str;
-        return ret;
-    }*/
-    /*Node *pre = expr(rest);
-    pre->ireg = depth + 1;
-    pre->name = tok->str;
-    expect(",", rest);
-    Node *post = arg_list(rest, depth + 1);
-    post->next = pre;
-    if (depth) {
-        return pre;
-    }
-    return head.next;*/
 }
