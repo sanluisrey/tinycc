@@ -196,6 +196,15 @@ bool consume_token(TokenKind kind, Token **rest) {
 }
 
 Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
+    if (kind == ND_ADD || kind == ND_SUB) {
+        if (lhs->type && lhs->type->ty) {
+            Type *ty = lhs->type->ptr_to;
+            rhs->val *= ty->ty*4 + 4;
+        } else if (rhs->type && rhs->type->ty) {
+            Type *ty = rhs->type->ptr_to;
+            lhs->val *= ty->ty*4 + 4;
+        }
+    }
     Node *ret = calloc(1, sizeof(Node));
     ret->kind = kind;
     ret->left = lhs;
@@ -591,17 +600,23 @@ Node *primary(Token **rest) {
             consume_token(TK_IDENT, rest);
             consume("(", rest);
             ret->args = arg_list(rest, 0);
-            //ret->args = args(rest);
             if(ret->args != NULL && ret->args->ireg > 6) {
                 error_at((*rest)->str, (*rest)->pos, "引数が6個より多いです。\n");
             }
             expect(")", rest);
             return ret;
         }
-        int *offset = calloc(1, sizeof(int));
-        if (consume_ident(rest, offset)) {
-            return new_node_lvar(*offset);
-        }
+        LVar *lvar = find_lvar(*rest);
+        Node *ret = calloc(1, sizeof(Node));
+        ret->kind = ND_LVAR;
+        ret->offset = lvar->offset;
+        ret->type = lvar->type;
+        consume_token(TK_IDENT, rest);
+        return ret;
+        //int *offset = calloc(1, sizeof(int));
+        //if (consume_ident(rest, offset)) {
+        //    return new_node_lvar(*offset);
+        //}
     }
     return new_node_num(expect_number(rest));
 }
@@ -609,15 +624,32 @@ Node *primary(Token **rest) {
 Node *arg_list(Token **rest, int depth){
     Token *tok = *rest;
     if (tok->len == 1 && strncmp(tok->str, ")", 1) == 0) return NULL;
-    if (strncmp(tok->next->str, ",", 1)) {
+    expr(rest);  //トークンを1単位進める
+    char *name = tok->str;
+    if (!equal(",", rest)) {
+        head.next = expr(&tok); // 前のトークン
+        Node *car = head.next;
+        car->ireg = ++depth;
+        car->name = name;
+        return car;
+    }
+    expect(",", rest);
+    Node *cdr = arg_list(rest, depth + 1);
+    Node *car = expr(&tok); // 前のトークン
+    car->ireg = depth + 1;
+    car->name = name;
+    cdr->next = car;
+    if(depth) return car;
+    return head.next;
+    /*if (strncmp(tok->next->str, ",", 1)) {
         Node *ret = &head;
         ret->next = expr(rest);
         ret = ret->next;
         ret->ireg = ++depth;
         ret->name = tok->str;
         return ret;
-    }
-    Node *pre = expr(rest);
+    }*/
+    /*Node *pre = expr(rest);
     pre->ireg = depth + 1;
     pre->name = tok->str;
     expect(",", rest);
@@ -626,5 +658,5 @@ Node *arg_list(Token **rest, int depth){
     if (depth) {
         return pre;
     }
-    return head.next;
+    return head.next;*/
 }

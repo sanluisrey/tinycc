@@ -1,11 +1,20 @@
 #!/bin/bash
 cat <<EOF | gcc -xc -c -o tmp2.o -
+#include <stdlib.h>
 int ret3() { return 3; }
 int ret5() { return 5; }
 int add(int x, int y) { return x+y; }
 int sub(int x, int y) { return x-y; }
 int add6(int a, int b, int c, int d, int e, int f) {
   return a+b+c+d+e+f;
+}
+void alloc4(int **p, int a, int b, int c, int d){
+    int *q = malloc(sizeof(int) * 4);
+    q[0] = a;
+    q[1] = b;
+    q[2] = c;
+    q[3] = d;
+    *p = q;
 }
 EOF
 assert() {
@@ -164,6 +173,23 @@ y = &x;
 *y = 3;
 return x;
 }'
+
+assert 4 '
+int main() {
+int *p;
+int *q;
+alloc4(&p, 1, 2, 4, 8);
+q = p + 2;
+return *q;}'
+
+assert 13 '
+int main() {
+int *p;
+int *q;
+alloc4(&p, 1, 2, 4, 8);
+q = p + 2;
+q = p + 3;
+return *q + 5;}'
 
 echo OK
 
