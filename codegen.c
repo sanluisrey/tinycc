@@ -45,77 +45,136 @@ static void pop(char *reg) {
     stackpos -= 8;
     assert(stackpos >= 0);
 }
+// raxが指す場所へ値をロードする。
+static void load(Type *type){
+    if (type->ty == ARRAY) {
+        return;
+    }
+    printf("    mov rax, [rax]\n");
+}
+// スタックトップが指すアドレスへraxをストアする。
+static void store(void) {
+    pop("rdi");
+    printf("    mov [rdi], rax\n");
+}
 
 // 式を左辺値として計算する。
 // ノードが変数を指す場合、変数のアドレスを計算し、スタックにプッシュする。
 // それ以外の場合、エラーを表示する。
 void gen_lval(Node *node){
-    if (node->kind == ND_DEREF) {
-        gen_lval(node->right);
-        pop("rax");
-        printf("    mov rax, [rax]\n");
-        push();
-        return;
+    switch (node->kind) {
+        case ND_LVAR:
+            printf("    mov rax, rbp\n");
+            printf("    sub rax, %d\n", node->offset);
+            return;
+            
+        case ND_DEREF:
+            gen(node->right);
+            return;
     }
-    if (node->kind != ND_LVAR) {
-        error("変数が左辺値ではありません。");
-        return;
-    }
-    printf("    mov rax, rbp\n");
-    printf("    sub rax, %d\n", node->offset);
-    push();
+    error("左辺値ではありません。");
 }
 
 void gen(Node *node){
     switch (node->kind) {
         case ND_NUM:
-            push_imm(node->val);
+            printf("    mov rax, %d\n",node->val);
             return;
         case ND_LVAR:
             gen_lval(node);
-            pop("rax");
-            printf("    mov rax, [rax]\n");
-            push();
+            load(node->type);
             return;
         case ND_ADDR:
             gen_lval(node->right);
             return;
         case ND_DEREF:
             gen(node->right);
-            pop("rax");
-            printf("    mov rax, [rax]\n");
-            push();
+            load(node->type);
             return;
         case ND_ASGMT:
-            gen_lval(node->left);
-            gen(node->right);
-            pop("rdi");
-            pop("rax");
-            printf("    mov [rax], rdi\n");
-            printf("    mov rax, rdi\n");
+            gen_lval(node->left); //rdi
             push();
+            gen(node->right); //rax
+            store();
             return;
+        case ND_FUNCCALL: {
+            Node *args = node->args;
+            while (args != NULL) {
+                if (args->ireg == 0) {
+                    args = args->next;
+                    continue;
+                }
+                gen(args);
+                printf("    mov %s, rax\n", MREGS[args->ireg - 1]);
+                args = args->next;
+            }
+            printf("    call %s\n", node->name);
+            return;
+        }
+    }
+    gen(node->right); //rdi
+    push();
+    gen(node->left); //rax
+    pop("rdi");
+    switch (node->kind) {
+        case ND_ADD:
+            printf("    add rax, rdi\n");
+            return;
+        case ND_SUB:
+            printf("    sub rax, rdi\n");
+            return;
+        case ND_MUL:
+            printf("    imul rax, rdi\n");
+            return;
+        case ND_DIV:
+            printf("    cqo\n");
+            printf("    idiv rdi\n");
+            return;
+        case ND_EQ:
+            printf("    cmp rax, rdi\n");
+            printf("    sete al\n");
+            printf("    movzb rax, al\n");
+            return;
+        case ND_NE:
+            printf("    cmp rax, rdi\n");
+            printf("    setne al\n");
+            printf("    movzb rax, al\n");
+            return;
+        case ND_GE:
+        case ND_LE:
+            printf("    cmp rax, rdi\n");
+            printf("    setle al\n");
+            printf("    movzb rax, al\n");
+            return;
+        case ND_GT:
+        case ND_LT:
+            printf("    cmp rax, rdi\n");
+            printf("    setl al\n");
+            printf("    movzb rax, al\n");
+            return;
+    }
+    error("不正な式です。");
+}
+
+static void gen_stmt(Node *node) {
+    switch (node->kind) {
         case ND_RETURN:
             gen(node->right);
-            pop("rax");
-            push();
             printf("    jmp .%s.return\n", label);
             return;
         case ND_IF: {
             int c = count();
             gen(node->cond);
             // condの結果を0と比較し、0であればLelseラベルへジャンプ
-            pop("rax");
             printf("    cmp rax, 0\n");
-            push();
             printf("    je .Lelse%d\n", c);
             // bodyのコード生成
-            gen(node->body);
+            gen_stmt(node->body);
             printf("    jmp .Lend%d\n", c);
             // elsのコード生成
             printf(".Lelse%d:\n", c);
             if (node->els != NULL) {
-                gen(node->els);
+                gen_stmt(node->els);
             }
             printf(".Lend%d:\n", c);
             return;
@@ -123,18 +182,17 @@ void gen(Node *node){
         case ND_FOR: {
             int c = count();
             if (node->initialization != NULL) {
-                gen(node->initialization);
+                gen_stmt(node->initialization);
             }
             printf(".Lbegin%d:\n", c);
             
             if (node->cond != NULL) {
                 gen(node->cond);
                 // condの結果を0と比較し、0でなければ.Lendラベルへジャンプ
-                pop("rax");
                 printf("    cmp rax, 0\n");
                 printf("    je .Lend%d\n", c);
             }
-            gen(node->body);
+            gen_stmt(node->body);
             if (node->step != NULL) {
                 gen(node->step);
             }
@@ -147,11 +205,10 @@ void gen(Node *node){
             printf(".Lbegin%d:\n", c);
             gen(node->cond);
             // condの結果を0と比較し、0でなければ.L3ラベルへジャンプ
-            pop("rax");
             printf("    cmp rax, 0\n");
             printf("    je .Lend%d\n", c);
             
-            gen(node->body);
+            gen_stmt(node->body);
             printf("    jmp .Lbegin%d\n", c);
             printf(".Lend%d:\n", c);
             
@@ -160,74 +217,21 @@ void gen(Node *node){
         case ND_BLOCK: {
             node = node->right;
             while (node != NULL) {
-                gen(node);
+                gen_stmt(node);
                 node = node->next;
                 // TODO pop
-                if (node != NULL) {
+                /*if (node != NULL) {
                     pop("rax");
-                }
+                }*/
             }
             return;
         }
-        case ND_FUNCCALL: {
-            Node *args = node->args;
-            while (args != NULL) {
-                if (args->ireg == 0) {
-                    args = args->next;
-                    continue;
-                }
-                gen(args);
-                pop("rax");
-                printf("    mov %s, rax\n", MREGS[args->ireg - 1]);
-                args = args->next;
-            }
-            printf("    call %s\n", node->name);
-            push();
+        case ND_EXPR_STMT:{
+            gen(node->right);
             return;
         }
     }
-    gen(node->left);
-    gen(node->right);
-    pop("rdi");
-    pop("rax");
-    switch (node->kind) {
-        case ND_ADD:
-            printf("    add rax, rdi\n");
-            break;
-        case ND_SUB:
-            printf("    sub rax, rdi\n");
-            break;
-        case ND_MUL:
-            printf("    imul rax, rdi\n");
-            break;
-        case ND_DIV:
-            printf("    cqo\n");
-            printf("    idiv rdi\n");
-            break;
-        case ND_EQ:
-            printf("    cmp rax, rdi\n");
-            printf("    sete al\n");
-            printf("    movzb rax, al\n");
-            break;
-        case ND_NE:
-            printf("    cmp rax, rdi\n");
-            printf("    setne al\n");
-            printf("    movzb rax, al\n");
-            break;
-        case ND_GE:
-        case ND_LE:
-            printf("    cmp rax, rdi\n");
-            printf("    setle al\n");
-            printf("    movzb rax, al\n");
-            break;
-        case ND_GT:
-        case ND_LT:
-            printf("    cmp rax, rdi\n");
-            printf("    setl al\n");
-            printf("    movzb rax, al\n");
-            break;
-    }
-    push();
+    error("不正なステートメントです。");
 }
 
 void codegen(Function *prog) {
@@ -235,7 +239,6 @@ void codegen(Function *prog) {
     printf(".intel_syntax noprefix\n");
     printf(".global main\n");
     for (Function *func = prog; func != NULL; func = func->next) {
-        int ireg = func->nparams;
         printf("%s:\n", func->name);
         printf("    mov rax, rbp\n");
         push();
@@ -251,10 +254,7 @@ void codegen(Function *prog) {
         // コードの本体部分の出力
         label = func->name;
         for (Node *body = func->code; body != NULL; body = body->next) {
-            gen(body);
-            // スタックから式の評価結果をポップする。
-            pop("rax");
-            printf("\n");
+            gen_stmt(body);
         }
         //エピローグ
         printf(".%s.return:\n", label);

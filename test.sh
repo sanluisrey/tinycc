@@ -9,7 +9,7 @@ int add6(int a, int b, int c, int d, int e, int f) {
   return a+b+c+d+e+f;
 }
 void alloc4(int **p, int a, int b, int c, int d){
-    int *q = malloc(sizeof(int) * 4);
+    int *q = (int*) malloc(sizeof(int) * 4);
     q[0] = a;
     q[1] = b;
     q[2] = c;
@@ -126,7 +126,7 @@ assert 2 'int main() { return sub(5, 3); }'
 assert 21 'int main() { return add6(1,2,3,4,5,6); }'
 
 #function dif
-assert 108 'int main(){return foo(8,100); } int foo(int x, int y){return x+y;}'
+assert 108 'int foo(int x, int y){return x+y;} int main(){return foo(8,100); } '
 assert 1 'int fib(int n) {
     if(n == 0) return 1;
     return fib(n-1);
@@ -155,6 +155,14 @@ int x;
 int *y;
 y = &x;
 *y = 3;
+return *y;
+}'
+
+assert 3 'int main(){
+int x;
+int *y;
+y = &x;
+x = 3;
 return *y;
 }'
 
@@ -222,6 +230,51 @@ assert 4 '
 int main(){
 return sizeof(sizeof(1));
 }'
+# 1次元配列
 
+assert 3 'int main() { int x[2]; int *y; y=&x; *y=3; return *x; }'
+
+assert 3 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *x; }'
+assert 4 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+1); }'
+assert 5 'int main() { int x[3]; *x=3; *(x+1)=4; *(x+2)=5; return *(x+2); }'
+assert 3 ' int main(){
+int a[2];
+*a = 1;
+*(a + 1) = 2;
+int *p;
+p = a;
+return *p + *(p + 1);
+}
+'
+assert 100 ' int main(){
+    int a[10];
+    int x;
+    x = 0;
+    a[9] = 100;
+    return a[9];
+}'
+
+assert 3 '
+int main(){
+int x;
+int *y;
+y = &x;
+*(y + 4) = 3;
+x = 10;
+return *(y + 4);
+}
+'
+
+assert 3 '
+int main(){
+int x;
+int *y;
+y = &x;
+y = y + 4;
+    *y = 3;
+    x = 10;
+return *y;
+}
+'
 echo OK
 

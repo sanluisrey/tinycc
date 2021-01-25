@@ -51,8 +51,9 @@ Token *tokenize(char *p);
 typedef struct Type Type;
 
 struct Type {
-    enum { INT, PTR} ty;
+    enum { INT, PTR, ARRAY} ty;
     struct Type *ptr_to;    // 型リスト
+    size_t array_size;
 };
 
 typedef struct LVar LVar;
@@ -87,6 +88,7 @@ typedef enum {
     ND_WHILE,   // while
     ND_BLOCK,   // {}
     ND_FUNCCALL,// 関数呼び出し
+    ND_EXPR_STMT, // expr;単体
     ND_ADDR,    // 単項&
     ND_DEREF,   // 単項*
 } NodeKind;
