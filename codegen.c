@@ -96,7 +96,8 @@ void gen(Node *node){
             load(node->type);
             return;
         case ND_GVAR:
-            printf("    mov rax, [rip+%s]\n", node->name);
+            gen_lval(node);
+            load(node->type);
             return;
         case ND_ADDR:
             gen_lval(node->right);
