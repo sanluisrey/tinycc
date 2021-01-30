@@ -276,5 +276,21 @@ y = y + 4;
 return *y;
 }
 '
+#グローバル変数
+assert 10 '
+int x;
+int main() {x = 10;return x; }
+'
+assert 14 '
+int x;
+int y;
+int main() {x = 10;y = 4; return x + y; }
+'
+assert 14 '
+int x;
+int y;
+int main() {int x; x = 10;y = 4; return x + y; }
+'
+
 echo OK
 

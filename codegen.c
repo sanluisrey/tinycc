@@ -29,6 +29,13 @@ int count(void) {
     return i++;
 }
 
+/*int position(Node *node) {
+    Type *type = node->type;
+    if(type->ty == INT) return 4;
+    if(type->ty == PTR) return 8;
+    return type->;
+}*/
+
 // raxレジスタからRSPへのプッシュのコード生成
 static void push() {
     printf("    push rax\n");
@@ -71,6 +78,10 @@ void gen_lval(Node *node){
         case ND_DEREF:
             gen(node->right);
             return;
+            
+        case ND_GVAR:
+            printf("    lea rax, [rip+%s]\n", node->name);
+            return;
     }
     error("左辺値ではありません。");
 }
@@ -83,6 +94,9 @@ void gen(Node *node){
         case ND_LVAR:
             gen_lval(node);
             load(node->type);
+            return;
+        case ND_GVAR:
+            printf("    mov rax, [rip+%s]\n", node->name);
             return;
         case ND_ADDR:
             gen_lval(node->right);
@@ -234,11 +248,44 @@ static void gen_stmt(Node *node) {
     error("不正なステートメントです。");
 }
 
+void glblgen(Var *globals) {
+    if(globals == NULL) return;
+    glblgen(globals->next);
+    if (globals->generated) return;
+    globals->generated = true;
+    printf(".data\n");
+    printf(".global %s\n",globals->str);
+    printf("%s:\n", globals->str);
+    Type *type = globals->type;
+    int size;
+    if (type->ty == INT) {
+        size = 4;
+    } else if(type->ty == PTR) {
+        size = 8;
+    } else {
+        size = type->array_size ? type->array_size : 1;
+        while (type->ptr_to != NULL && type->ty == ARRAY) {
+            type = type->ptr_to;
+            if(type->ty == ARRAY) size *= type->array_size;
+        }
+        if (type->ty == INT) {
+            size *= 4;
+        } else {
+            size *= 8;
+        }
+    }
+    printf(".zero %d\n", size);
+}
+
 void codegen(Function *prog) {
     // アセンブリの前半部分の出力
     printf(".intel_syntax noprefix\n");
-    printf(".global main\n");
     for (Function *func = prog; func != NULL; func = func->next) {
+        // グローバル変数のコード生成
+        glblgen(prog->globals);
+        // 関数のコード生成
+        printf(".global %s\n", func->name);
+        printf(".text\n");
         printf("%s:\n", func->name);
         printf("    mov rax, rbp\n");
         push();

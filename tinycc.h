@@ -56,15 +56,17 @@ struct Type {
     size_t array_size;
 };
 
-typedef struct LVar LVar;
+typedef struct Var Var;
 
-struct LVar {
-    char *str;      // ローカル変数の文字列
-    int len;        // 文字列の長さ
-    int offset;     // RBPからのオフセット
-    bool used;
-    LVar *next;     // 次に定義されたローカル変数へのポインタ
-    Type *type;      // ローカル変数の型
+struct Var {
+    char *str;      // 変数名
+    int len;        // 変数名の長さ
+    int offset;     // ローカル変数のRBPからのオフセット
+    bool used;      // 定義されているかどうか
+    Var *next;     // 次に定義された変数へのポインタ
+    Type *type;      // 変数の型
+    bool global;    // グローバル変数かどうか
+    bool generated;   // コード生成済みかどうか
 };
 
 // 抽象構文木のノードの種類
@@ -82,6 +84,7 @@ typedef enum {
     ND_LE,      // <=
     ND_ASGMT,   // = 代入
     ND_LVAR,    // ローカル変数
+    ND_GVAR,    // グローバル変数
     ND_RETURN,  // return
     ND_IF,      // if
     ND_FOR,     // for loop
@@ -116,7 +119,7 @@ struct Node {
     Node *args;     // 関数呼び出しの引数
     int ireg;       // 関数呼び出しの引数の順序
     
-    Type *type;     // 仮引数の型
+    Type *type;     // 型
 };
 
 // プログラム全体を表す
@@ -124,12 +127,13 @@ typedef struct Function Function;
 
 struct Function {
     Node *code;
-    LVar *locals;
+    Var *locals;
     int stack_size;
     char *name;
     Function *next;
     Node *args;
     int nparams;
+    Var *globals;
 };
 
 // パーサー

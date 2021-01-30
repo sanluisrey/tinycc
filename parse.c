@@ -7,10 +7,11 @@
 
 #include "tinycc.h"
 
-// 現在のパースしている関数
-static Function *prog;
 // ローカル変数リスト
-static LVar *locals;
+static Var *locals;
+
+// グローバル変数リスト
+static Var *globals;
 
 // 関数のスタック領域のサイズ
 static int stack_size;
@@ -25,12 +26,12 @@ static Node *tail;
 static Type *ty_recar;
 
 // パーサーの宣言
-static Node *glbl_decl(Token **rest);
-static Type *type_expr(Token **rest);
+static Function *glbl_def(Token **rest);
+//static Type *type_expr(Token **rest);
 static Type *size_list(Token **rest);
 static Type *array_sz(Token **rest);
 static Type *type_prim(Token **rest);
-static void decl(Token **rest);
+static void decl(Token **rest, bool global);
 static Function *f_head(Token **rest);
 static Node *p_list(Token **rest, int depth);
 static Node *p_decl(Token **rest);
@@ -46,7 +47,6 @@ static Node *add(Token **rest);
 static Node *mul(Token **rest);
 static Node *unary(Token **rest);
 static Node *primary(Token **rest);
-static Node *args(Token **rest);
 static Node *arg_list(Token **rest, int depth);
 
 // 次のトークンが引数の記号と等しいかどうか真偽を返す。
@@ -90,8 +90,8 @@ int expect_number(Token **rest){
 }
 
 // 変数を名前で検索する。見つからなかった場合はエラー処理。
-LVar *find_lvar(Token *tok) {
-    LVar *cur = NULL;
+Var *find_var(Token *tok) {
+    Var *cur = NULL;
     int i = 0;
     for (cur = locals; cur != NULL; cur = cur->next, i++) {
         if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
@@ -113,26 +113,70 @@ LVar *find_lvar(Token *tok) {
     return cur;
 }
 
-// 変数リストへの登録
+// ローカル変数リストへの登録
 void lvarDecl(Token *tok, Type *type){
-    LVar *cur = NULL;
+    Var *cur = NULL;
     for (cur = locals; cur != NULL; cur = cur->next) {
-        if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
+        if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0 && cur->global == false) {
             error_at(tok->str, tok->pos, "Duplicated declaration");
         }
     }
     if (locals == NULL) {
-        locals = calloc(1, sizeof(LVar));
-        locals->str = tok->str;
-        locals->len = tok->len;
-        locals->type = type;
+        if (globals == NULL) {
+            locals = calloc(1, sizeof(Var));
+            locals->str = tok->str;
+            locals->len = tok->len;
+            locals->type = type;
+            locals->global = false;
+        } else {
+            locals = globals;
+            Var *new = calloc(1, sizeof(Var));
+            new->len = tok->len;
+            new->str = tok->str;
+            new->next = locals;
+            new->type = type;
+            new->global = false;
+            locals = new;
+        }
     } else {
-        LVar *new = calloc(1, sizeof(LVar));
+        Var *new = calloc(1, sizeof(Var));
         new->len = tok->len;
         new->str = tok->str;
         new->next = locals;
         new->type = type;
+        new->global = false;
         locals = new;
+    }
+}
+// グローバル変数リストへの登録
+void glvarDecl(Token *tok, Type *type){
+    for (Var *cur = globals; cur != NULL; cur = cur->next) {
+        if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
+            error_at(tok->str, tok->pos, "Duplicated declaration");
+        }
+    }
+    if (globals == NULL) {
+        globals = calloc(1, sizeof(Var));
+        globals->str = tok->str;
+        globals->len = tok->len;
+        globals->type = type;
+        globals->global = true;
+    } else {
+        Var *new = calloc(1, sizeof(Var));
+        new->len = tok->len;
+        new->str = tok->str;
+        new->next = globals;
+        new->type = type;
+        new->global = true;
+        globals = new;
+    }
+}
+
+void varDecl(Token *tok, Type *type, bool global){
+    if (global) {
+        glvarDecl(tok, type);
+    } else {
+        lvarDecl(tok, type);
     }
 }
 
@@ -150,22 +194,22 @@ Type *RefType(Token **rest) {
 
 // 仮引数の変数リストへの登録
 void pvarDecl(Node *args, Token *tok) {
-    LVar *cur = NULL;
+    Var *cur = NULL;
     for (cur = locals; cur != NULL; cur = cur->next) {
         if (strlen(args->name) == cur->len && strncmp(args->name, cur->str, cur->len) == 0) {
             error_at(tok->str, tok->pos, "Duplicated declaration");
         }
     }
     if (locals == NULL) {
-        locals = calloc(1, sizeof(LVar));
+        locals = calloc(1, sizeof(Var));
         locals->str = args->name;
-        locals->len = strlen(args->name);
+        locals->len = (int) strlen(args->name);
         locals->offset = args->ireg * 8;
         locals->used = true;
         locals->type = args->type;
     } else {
-        LVar *new = calloc(1, sizeof(LVar));
-        new->len = strlen(args->name);
+        Var *new = calloc(1, sizeof(Var));
+        new->len = (int) strlen(args->name);
         new->str = args->name;
         new->offset = args->ireg * 8;
         new->used = true;
@@ -182,7 +226,7 @@ bool consume_ident(Token **rest, int *offset) {
     if (token->kind != TK_IDENT) {
         return false;
     }
-    LVar *lvar = find_lvar(token);
+    Var *lvar = find_var(token);
     *offset = lvar->offset;
     *rest = token->next;
     return true;
@@ -203,6 +247,16 @@ bool consume_token(TokenKind kind, Token **rest) {
     }
     *rest = token->next;
     return true;
+}
+
+// 次のトークンの種類がkindの時には、トークンを一つ読み進める
+// それ以外の場合にはエラー処理。
+void expect_token(TokenKind kind, Token **rest) {
+    Token *token = *rest;
+    if (token->kind != kind) {
+        error_at(token->str, token->pos, "期待したトークン種類ではありません");
+    }
+    *rest = token->next;
 }
 
 Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
@@ -232,10 +286,16 @@ Node *new_node_num(int val){
     return ret;
 }
 
-Node *new_node_lvar(int offset){
+Node *new_node_var(Var *var){
     Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_LVAR;
-    ret->offset = offset;
+    if (var->global) {
+        ret->kind = ND_GVAR;
+        ret->name = var->str;
+    } else {
+        ret->kind = ND_LVAR;
+        ret->offset = var->offset;
+    }
+    ret->type = var->type;
     return ret;
 }
 
@@ -283,8 +343,9 @@ Node *new_node_expr(Node *expr_stmt) {
 
 // 生成規則(TODO)
 // program    = glbl_decl
-// glbl_decl  =
-//            = glbl_decl func_def
+// glbl_def   =
+//            = glbl_def func_def
+//            = glbl_def decl ";"
 // type_expr  = type_prim
 //            | type_prim size_list
 // type_prim  = type
@@ -334,25 +395,26 @@ Node *new_node_expr(Node *expr_stmt) {
 
 
 Function *program(Token **rest) {
-    Function head;
-    prog = &head;
-    while (!at_eof(*rest)) {
-        prog = prog->next = func_def(rest);
-    }
-    return head.next;
+    return glbl_def(rest);
 }
-// type_expr  = type_prim
-//            | type_prim size_list
-/*Type *type_expr(Token **rest){
-    ty_recar = type_prim(rest);//Type *ret = type_prim(rest);
-    Type *sz_list = size_list(rest);//return ret;
-    if (sz_list != NULL) {
-        ty_recar->ptr_to = sz_list->ptr_to;
-        ty_recar->array_size = sz_list->array_size;
-        ty_recar->ty = ARRAY;
+
+Function *glbl_def(Token **rest) {
+    Token *tok = *rest; // 先読みのため定義
+    if(at_eof(tok)) return NULL;
+    while (func_def(&tok) == NULL) {
+        decl(rest, true);
+        expect(";", rest);
+        tok = *rest;
     }
-    return ty_recar;
-};*/
+    Function *car = func_def(rest);
+    if (car == NULL) {
+        return NULL;
+    }
+    car->globals = globals;
+    Function *cdr = glbl_def(rest);
+    car->next = cdr;
+    return car;
+};
 
 Type *type_prim(Token **rest){
     consume_token(TK_TYPE, rest);
@@ -382,27 +444,31 @@ Type *array_sz(Token **rest){
     return ret;
 }
 
-void decl(Token **rest){
+void decl(Token **rest, bool global){
     ty_recar = type_prim(rest);
     Token *tok = *rest;
     consume_token(TK_IDENT, rest);
     Type *cdr = size_list(rest);
-    if (cdr != NULL) lvarDecl(tok, cdr);
-    else lvarDecl(tok, ty_recar);
+    if (cdr != NULL) varDecl(tok, cdr, global);
+    else varDecl(tok, ty_recar, global);
 };
 
 Function *f_head(Token **rest){
     Token *tok = *rest;
-    if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
+    if (tok->kind != TK_IDENT) return NULL;
     Function *ret = calloc(1, sizeof(Function));
     ret->name = tok->str;
     consume_token(TK_IDENT, rest);
     tok = *rest;
-    expect("(", rest);
+    if (!consume("(", rest)) {
+        return NULL;
+    }
     Node *args = p_list(rest, 0);
     ret->args = args;
     if(args != NULL) ret->nparams = args->ireg;
-    expect(")", rest);
+    if (!consume(")", rest)) {
+        return NULL;
+    }
     return ret;
 };
 
@@ -436,11 +502,13 @@ Node *p_decl(Token **rest){
 
 Function *func_def(Token **rest){
     Token *tok = *rest;
-    if (tok->kind != TK_TYPE) error_at(tok->str, tok->pos, "型がありません。");
+    if (tok->kind != TK_TYPE) return NULL;;
     consume_token(TK_TYPE, rest);
-    locals = NULL;
+    locals = globals;
     Function *ret = f_head(rest);
-    expect("{", rest);
+    if (ret == NULL || !consume("{", rest)) {
+        return NULL;
+    }
     Node head;
     Node *cur = &head;
     stack_size = ret->nparams * 8;
@@ -474,7 +542,7 @@ void decl_list(Token **rest, int depth) {
     Token *tok = *rest;
     if (tok->kind != TK_TYPE) return;
     if(at_eof(tok)) error_at(tok->str, tok->pos, "';'がありません。");
-    decl(rest);
+    decl(rest, false); // TODO global variable
     expect(";", rest);
     decl_list(rest, depth + 1);
     return;
@@ -704,11 +772,8 @@ Node *primary(Token **rest) {
             expect(")", rest);
             return ret;
         } else {
-            LVar *lvar = find_lvar(*rest);
-            ret = calloc(1, sizeof(Node));
-            ret->kind = ND_LVAR;
-            ret->offset = lvar->offset;
-            ret->type = lvar->type;
+            Var *var = find_var(*rest);
+            ret = new_node_var(var);
             consume_token(TK_IDENT, rest);
         }
     } else {
