@@ -796,14 +796,14 @@ Node *primary(Token **rest) {
     } else {
         ret = new_node_num(expect_number(rest));
     }
-    // 配列のパース
+    // 配列のパース TODO 多次元配列
     tok = *rest;
-    if (!strncmp("[", tok->str, 1)) {
+    while (!strncmp("[", tok->str, 1)) {
         Node *base = ret;
         expect("[", rest);
         Node *offset = expr(rest);
         expect("]", rest);
-        if (base->type->ty != ARRAY && offset->type->ty != ARRAY) {
+        if (base->type->ty == INT && offset->type->ty == INT) {
             error_at((*rest)->str, (*rest)->pos, "配列型ではありません。");
         }
         Node *right = new_node_binary(ND_ADD, base, offset);
@@ -815,6 +815,7 @@ Node *primary(Token **rest) {
             right->type = offset->type;
             ret->type = offset->type->ptr_to;
         }
+        tok = *rest;
     }
     return ret;
 }
