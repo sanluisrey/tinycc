@@ -102,13 +102,15 @@ Var *find_var(Token *tok) {
         error_at(tok->str, tok->pos, "Undeclared identifier used");
     }
     if (!cur->used) {
-        cur->offset = stack_size + 8;
+        stack_size += 8;
         cur->used = true;
         if (cur->type->ty == ARRAY) {
             for (Type *ptr = cur->type->ptr_to; ptr; ptr = ptr->ptr_to) {
-                stack_size += 8 * cur->type->array_size; //TODO 多次元配列
+                stack_size *= cur->type->array_size; //TODO 多次元配列
             }
-        } else stack_size += 8;
+            stack_size *= 4;
+        }
+        cur->offset = stack_size;
     }
     return cur;
 }
@@ -263,10 +265,24 @@ Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
     if (kind == ND_ADD || kind == ND_SUB) {
         if (lhs->type && lhs->type->ty) {
             Type *ty = lhs->type->ptr_to;
-            rhs->val *= ty->ty*4 + 4;
+            if (ty->ty == PTR) {
+                rhs->val *= 8;
+            } else {
+                rhs->val *= 4;
+            }
+            if (lhs->type->ty == ARRAY) {
+                Type *next = lhs->type->ptr_to;
+                if(next->ty == ARRAY) rhs->val *= next->array_size;
+            }
         } else if (rhs->type && rhs->type->ty) {
             Type *ty = rhs->type->ptr_to;
-            lhs->val *= ty->ty*4 + 4;
+            if (ty->ty == PTR) {
+                lhs->val *= 8;
+            } else {
+                lhs->val *= 4;
+            }
+            Type *next = rhs->type->ptr_to;
+            if(next->ty == ARRAY) lhs->val *= next->array_size;
         }
     }
     Node *ret = calloc(1, sizeof(Node));
@@ -760,6 +776,7 @@ Node *primary(Token **rest) {
         expect(")",rest);
     } else if (tok->kind == TK_IDENT) {
         tok = tok->next;
+        // 関数呼び出しのパース
         if (tok->len == 1 && strncmp(tok->str, "(", 1) == 0) {
             Node *ret = new_node_funccall(*rest);       // TODO register return type
             ret->type = calloc(1, sizeof(Type));

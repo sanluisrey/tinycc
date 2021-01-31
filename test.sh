@@ -276,6 +276,14 @@ y = y + 4;
 return *y;
 }
 '
+# 多次元配列
+assert 5 'int main() { int x[2][3]; *(*(x+1)+2)=5; return *(*(x+1)+2); }'
+assert 0 'int main() { int x[2][3]; int *y; y=x[0]; *y=0; return **x; }'
+assert 1 'int main() { int x[2][3]; int *y; y=x[0]; *(y+1)=1; return *(*x+1); }'
+assert 2 'int main() { int x[2][3]; int *y; y=x[0]; *(y+2)=2; return *(*x+2); }'
+assert 3 'int main() { int x[2][3]; int *y; y=x[0]; *(y+3)=3; return **(x+1); }'
+assert 4 'int main() { int x[2][3]; int *y; y=x[0]; *(y+4)=4; return *(*(x+1)+1); }'
+assert 5 'int main() { int x[2][3]; int *y; y=x[0]; *(y+5)=5; return *(*(x+1)+2); }'
 #グローバル変数
 assert 10 '
 int x;
