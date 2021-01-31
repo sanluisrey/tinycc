@@ -292,6 +292,14 @@ assert 2 'int main() { int x[2][3]; int *y; y=x[0]; y[2]=2; return x[0][2]; }'
 assert 3 'int main() { int x[2][3]; int *y; y=x[0]; y[3]=3; return x[1][0]; }'
 assert 4 'int main() { int x[2][3]; int *y; y=x[0]; y[4]=4; return x[1][1]; }'
 assert 5 'int main() { int x[2][3]; int *y; y=x[0]; y[5]=5; return x[1][2]; }'
+# 多次元配列 sizeof
+assert 16 'int main() { int x[4]; return sizeof(x); }'
+assert 48 'int main() { int x[3][4]; return sizeof(x); }'
+assert 16 'int main() { int x[3][4]; return sizeof(*x); }'
+assert 4 'int main() { int x[3][4]; return sizeof(**x); }'
+assert 5 'int main() { int x[3][4]; return sizeof(**x) + 1; }'
+assert 5 'int main() { int x[3][4]; return sizeof **x + 1; }'
+assert 4 'int main() { int x[3][4]; return sizeof(**x + 1); }'
 #グローバル変数
 assert 10 '
 int x;
@@ -311,6 +319,9 @@ assert 0 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[0]; }'
 assert 1 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[1]; }'
 assert 2 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[2]; }'
 assert 3 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[3]; }'
+
+assert 4 'int x; int main() { return sizeof(x); }'
+assert 16 'int x[4]; int main() { return sizeof(x); }'
 
 echo OK
 

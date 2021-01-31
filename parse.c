@@ -221,6 +221,21 @@ void pvarDecl(Node *args, Token *tok) {
     }
 }
 
+// 引数の型のサイズを求める。
+int type_size(Type *type) {
+    switch (type->ty) {
+        case INT:
+            return 4;
+            
+        case PTR:
+            return 8;
+            
+        case ARRAY:{
+            return type->array_size * (int) type_size(type->ptr_to);
+        }
+    }
+}
+
 // 次のトークンの種類がTK_IDENTの時には、ローカル変数リストを検索し、トークンを一つ読み進めて
 // 真を返す。それ以外の場合には偽を返す。
 bool consume_ident(Token **rest, int *offset) {
@@ -734,14 +749,14 @@ Node *unary(Token **rest) {
     Node *ret;
     if (consume_token(TK_SIZEOF, rest)) {
         Node *right = unary(rest);
-        int type_size = (right->type->ty)*4 + 4;
+        int size = type_size(right->type);
         if (right->kind == ND_MUL) {
-            type_size *= right->val;
+            size *= right->val;
         }
         if (right->kind == ND_DIV) {
-            type_size /= right->val;
+            size /= right->val;
         }
-        ret = new_node_num(type_size);
+        ret = new_node_num(size);
         return ret;
     } else if (consume("*",rest)) {
         Node *right = unary(rest);
