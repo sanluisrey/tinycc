@@ -33,7 +33,6 @@ assert() {
     exit 1
   fi
 }
-
 assert 0 'int main(){ return 0; }'
 assert 42 'int main(){ return 42; }'
 assert 21 'int main(){ return 5+20-4; }'
@@ -322,6 +321,14 @@ assert 3 'int x[4]; int main() { x[0]=0; x[1]=1; x[2]=2; x[3]=3; return x[3]; }'
 
 assert 4 'int x; int main() { return sizeof(x); }'
 assert 16 'int x[4]; int main() { return sizeof(x); }'
+
+# char type
+assert 1 'int main() { char x; x=1; return x; }'
+assert 1 'int main() { char x;x=1; char y;y=2; return x; }'
+assert 2 'int main() { char x;x=1; char y;y=2; return y; }'
+assert 1 'int main() { char x; return sizeof(x); }'
+assert 10 'int main() { char x[10]; return sizeof(x); }'
+assert 1 'int main() { return sub_char(7, 3, 3); } int sub_char(char a, char b, char c) { return a-b-c; }'
 
 echo OK
 

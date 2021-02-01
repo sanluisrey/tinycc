@@ -102,14 +102,15 @@ Var *find_var(Token *tok) {
         error_at(tok->str, tok->pos, "Undeclared identifier used");
     }
     if (!cur->used) {
-        stack_size += 8;
         cur->used = true;
         if (cur->type->ty == ARRAY) {
+            stack_size += 8;
             for (Type *ptr = cur->type->ptr_to; ptr; ptr = ptr->ptr_to) {
-                stack_size *= cur->type->array_size; //TODO 多次元配列
+                stack_size *= cur->type->array_size;
             }
             stack_size *= 4;
-        }
+        } else if(cur->type->ty == CHAR) stack_size += 1;
+        else stack_size += 8;
         cur->offset = stack_size;
     }
     return cur;
@@ -182,7 +183,7 @@ void varDecl(Token *tok, Type *type, bool global){
     }
 }
 
-// 1次型式のパース
+// 1次型式のパース TODO char*
 Type *RefType(Token **rest) {
     Token *tok = *rest;
     Type *ret = calloc(1, sizeof(Type));
@@ -231,8 +232,11 @@ int type_size(Type *type) {
             return 8;
             
         case ARRAY:{
-            return type->array_size * (int) type_size(type->ptr_to);
+            return (int) type->array_size * type_size(type->ptr_to);
         }
+            
+        case CHAR:
+            return 1;
     }
 }
 
@@ -446,9 +450,15 @@ Function *glbl_def(Token **rest) {
     car->next = cdr;
     return car;
 };
-
+// TODO char*
 Type *type_prim(Token **rest){
+    Token *tok = *rest;
     consume_token(TK_TYPE, rest);
+    if(strncmp(tok->str, "char", 4) == 0){
+        Type *ret = calloc(1, sizeof(Type));
+        ret->ty = CHAR;
+        return ret;
+    }
     return RefType(rest);
 };
 

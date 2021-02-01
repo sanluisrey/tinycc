@@ -41,11 +41,6 @@ static void push() {
     printf("    push rax\n");
     stackpos += 8;
 }
-// 即値からRSPへのプッシュのコード生成
-static void push_imm(int n) {
-    printf("    push %d\n", n);
-    stackpos += 8;
-}
 // RSPからのポップのコード生成
 static void pop(char *reg) {
     printf("    pop %s\n", reg);
@@ -56,12 +51,19 @@ static void pop(char *reg) {
 static void load(Type *type){
     if (type->ty == ARRAY) {
         return;
+    } else if(type->ty == CHAR){
+        printf("    movsx rax, BYTE PTR [rax]\n");
+        return;
     }
     printf("    mov rax, [rax]\n");
 }
 // スタックトップが指すアドレスへraxをストアする。
-static void store(void) {
+static void store(Type *type) {
     pop("rdi");
+    if (type != NULL && type->ty == CHAR) { // TODO DEREF 正しく型が設定できていない
+        printf("    mov [rdi], al\n");
+        return;
+    }
     printf("    mov [rdi], rax\n");
 }
 
@@ -110,7 +112,7 @@ void gen(Node *node){
             gen_lval(node->left); //rdi
             push();
             gen(node->right); //rax
-            store();
+            store(node->left->type);
             return;
         case ND_FUNCCALL: {
             Node *args = node->args;
@@ -234,10 +236,6 @@ static void gen_stmt(Node *node) {
             while (node != NULL) {
                 gen_stmt(node);
                 node = node->next;
-                // TODO pop
-                /*if (node != NULL) {
-                    pop("rax");
-                }*/
             }
             return;
         }
