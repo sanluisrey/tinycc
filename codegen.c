@@ -29,13 +29,6 @@ int count(void) {
     return i++;
 }
 
-/*int position(Node *node) {
-    Type *type = node->type;
-    if(type->ty == INT) return 4;
-    if(type->ty == PTR) return 8;
-    return type->;
-}*/
-
 // raxレジスタからRSPへのプッシュのコード生成
 static void push() {
     printf("    push rax\n");

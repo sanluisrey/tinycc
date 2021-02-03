@@ -184,15 +184,15 @@ void varDecl(Token *tok, Type *type, bool global){
 }
 
 // 1次型式のパース TODO char*
-Type *RefType(Token **rest) {
+Type *RefType(Token **rest, Type *type) {
     Token *tok = *rest;
-    Type *ret = calloc(1, sizeof(Type));
     if(strncmp(tok->str, "*", 1) == 0) {
+        Type *ret = calloc(1, sizeof(Type));
         ret->ty = PTR;
         *rest = tok->next;
-        ret->ptr_to = RefType(rest);
-    }
-    return ret;
+        ret->ptr_to = RefType(rest, type);
+        return ret;
+    } else return type;
 }
 
 // 仮引数の変数リストへの登録
@@ -282,7 +282,7 @@ void expect_token(TokenKind kind, Token **rest) {
 
 Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
     if (kind == ND_ADD || kind == ND_SUB) {
-        if (lhs->type && lhs->type->ty) {
+        if (lhs->type && (lhs->type->ty == PTR || lhs->type->ty == ARRAY)) {
             Type *ty = lhs->type->ptr_to;
             if (ty->ty == PTR) {
                 rhs->val *= 8;
@@ -293,7 +293,7 @@ Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
                 Type *next = lhs->type->ptr_to;
                 if(next->ty == ARRAY) rhs->val *= next->array_size;
             }
-        } else if (rhs->type && rhs->type->ty) {
+        } else if (rhs->type && (rhs->type->ty == PTR || rhs->type->ty == ARRAY)) {
             Type *ty = rhs->type->ptr_to;
             if (ty->ty == PTR) {
                 lhs->val *= 8;
@@ -453,13 +453,15 @@ Function *glbl_def(Token **rest) {
 // TODO char*
 Type *type_prim(Token **rest){
     Token *tok = *rest;
-    consume_token(TK_TYPE, rest);
-    if(strncmp(tok->str, "char", 4) == 0){
-        Type *ret = calloc(1, sizeof(Type));
-        ret->ty = CHAR;
-        return ret;
-    }
-    return RefType(rest);
+    Type *type = calloc(1, sizeof(Type));
+    if (consume_token(TK_TYPE, rest)) {
+        if (strncmp(tok->str, "char", 4) == 0) {
+            type->ty = CHAR;
+        } else {
+            type->ty = INT;
+        }
+    } else error_at(tok->str, tok->pos, "型がありません。");
+    return RefType(rest, type);
 };
 
 // size_list  = array_sz
@@ -530,7 +532,7 @@ Node *p_list(Token **rest, int depth){
 };
 
 Node *p_decl(Token **rest){
-    consume_token(TK_TYPE, rest);
+    //consume_token(TK_TYPE, rest);
     Type *type = type_prim(rest);
     Token *tok = *rest;
     if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
