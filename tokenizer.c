@@ -113,6 +113,17 @@ Token *tokenize(char *p){
             p += 4;
             continue;
         }
+        if (strncmp(p, "\"", 1) == 0) {
+            char *q = ++p;
+            while (strncmp(p, "\"", 1) != 0) {
+                if(*p == EOF || strncmp(p, "\n", 1) == 0) error_at(p, p - user_input, "\"がありません。");
+                p++;
+            }
+            int len = p - q;
+            cur = new_token(TK_STR, cur, q, len);
+            p++;
+            continue;
+        }
         if (isalpha(*p)) {
             char *q = p++;
             while (is_alnum(*p)) {

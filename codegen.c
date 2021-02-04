@@ -77,6 +77,10 @@ void gen_lval(Node *node){
         case ND_GVAR:
             printf("    lea rax, [rip+%s]\n", node->name);
             return;
+            
+        case ND_STR:
+            printf("    lea rax, [rip+.LC%d]\n", node->offset);
+            return;
     }
     error("左辺値ではありません。");
 }
@@ -119,6 +123,10 @@ void gen(Node *node){
                 args = args->next;
             }
             printf("    call %s\n", node->name);
+            return;
+        }
+        case ND_STR: {
+            gen_lval(node);
             return;
         }
     }
@@ -269,9 +277,17 @@ void glblgen(Var *globals) {
     printf(".zero %d\n", size);
 }
 
+void strgen(Token *literals) {
+    for (Token *cur = literals; cur != NULL; cur = cur->next) {
+        printf(".LC%d:\n", cur->pos);
+        printf("    .string \"%s\"\n", cur->str);
+    }
+}
+
 void codegen(Function *prog) {
-    // アセンブリの前半部分の出力
     printf(".intel_syntax noprefix\n");
+    // 文字列リテラルのコード生成
+    strgen(prog->literals);
     for (Function *func = prog; func != NULL; func = func->next) {
         // グローバル変数のコード生成
         glblgen(prog->globals);

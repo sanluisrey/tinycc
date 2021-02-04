@@ -29,6 +29,7 @@ typedef enum {
     TK_WHILE,       // while
     TK_TYPE,        // 型
     TK_SIZEOF,      // sizeof演算子
+    TK_STR,     // string literal
 } TokenKind;
 
 typedef struct Token Token;
@@ -94,6 +95,7 @@ typedef enum {
     ND_EXPR_STMT, // expr;単体
     ND_ADDR,    // 単項&
     ND_DEREF,   // 単項*
+    ND_STR, // string literal
 } NodeKind;
 
 typedef struct Node Node;
@@ -134,6 +136,7 @@ struct Function {
     Node *args;
     int nparams;
     Var *globals;
+    Token *literals;
 };
 
 // パーサー

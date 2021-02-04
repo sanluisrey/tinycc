@@ -25,6 +25,9 @@ static Node *tail;
 // 配列型のポインタレコードの末尾
 static Type *ty_recar;
 
+// 文字列リテラルのリスト
+static Token *literals;
+
 // パーサーの宣言
 static Function *glbl_def(Token **rest);
 //static Type *type_expr(Token **rest);
@@ -183,6 +186,29 @@ void varDecl(Token *tok, Type *type, bool global){
     }
 }
 
+// 文字列リストへの登録
+Token *strDecl(Token *tok) {
+    for (Token *cur = literals; cur != NULL; cur = cur->next) {
+        if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
+            return cur;
+        }
+    }
+    if (literals == NULL) {
+        literals = calloc(1, sizeof(Token));
+        literals->str = tok->str;
+        literals->len = tok->len;
+        literals->pos = 1;
+    } else {
+        Token *new = calloc(1, sizeof(Token));
+        new->str = tok->str;
+        new->len = tok->len;
+        new->pos = literals->pos + 1;
+        literals->next = new;
+        literals = new;
+    }
+    return literals;
+}
+
 // 1次型式のパース TODO char*
 Type *RefType(Token **rest, Type *type) {
     Token *tok = *rest;
@@ -286,6 +312,8 @@ Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
             Type *ty = lhs->type->ptr_to;
             if (ty->ty == PTR) {
                 rhs->val *= 8;
+            } else if(ty->ty == CHAR){
+                rhs->val *= 1;
             } else {
                 rhs->val *= 4;
             }
@@ -297,6 +325,8 @@ Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
             Type *ty = rhs->type->ptr_to;
             if (ty->ty == PTR) {
                 lhs->val *= 8;
+            } else if(ty->ty == CHAR){
+                lhs->val *= 1;
             } else {
                 lhs->val *= 4;
             }
@@ -376,6 +406,21 @@ Node *new_node_expr(Node *expr_stmt) {
     return ret;
 }
 
+Node *new_node_str(Token *tok) {
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_STR;
+    ret->name = tok->str;
+    ret->offset = strDecl(tok)->pos;
+    Type *type = calloc(1, sizeof(Type));
+    Type *ptr_to = calloc(1, sizeof(Type));
+    ptr_to->ty = CHAR;
+    type->ty = ARRAY;
+    type->ptr_to = ptr_to;
+    type->array_size = tok->len;
+    ret->type = type;
+    return ret;
+}
+
 // 生成規則(TODO)
 // program    = glbl_decl
 // glbl_def   =
@@ -424,13 +469,16 @@ Node *new_node_expr(Node *expr_stmt) {
 //            | "*" unary
 //            | "&" unary
 // primary    = "(" expr ")" | ident "(" arg_list ")" | num | primary "[" expr "]"
+//            | string
 // arg_list   =
 //            | expr
 //            | arg_list "," expr
 
 
 Function *program(Token **rest) {
-    return glbl_def(rest);
+    Function *ret = glbl_def(rest);
+    ret->literals = literals;
+    return ret;
 }
 
 Function *glbl_def(Token **rest) {
@@ -532,7 +580,6 @@ Node *p_list(Token **rest, int depth){
 };
 
 Node *p_decl(Token **rest){
-    //consume_token(TK_TYPE, rest);
     Type *type = type_prim(rest);
     Token *tok = *rest;
     if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
@@ -794,13 +841,16 @@ Node *unary(Token **rest) {
     }
     return primary(rest);
 }
-//primary    = "(" expr ")" | ident "(" arg_list ")" | num | primary "[" expr "]"
+//primary    = "(" expr ")" | ident "(" arg_list ")" | num | primary "[" expr "]" | string
 Node *primary(Token **rest) {
     Token *tok = *rest;
     Node *ret;
     if (consume("(",rest)) {
         ret = expr(rest);
         expect(")",rest);
+    } else if(tok->kind == TK_STR) {
+        *rest = tok->next;
+        ret = new_node_str(tok);
     } else if (tok->kind == TK_IDENT) {
         tok = tok->next;
         // 関数呼び出しのパース
@@ -823,19 +873,19 @@ Node *primary(Token **rest) {
     } else {
         ret = new_node_num(expect_number(rest));
     }
-    // 配列のパース TODO 多次元配列
+    // 配列のパース TODO 多次元配列 型登録
     tok = *rest;
     while (!strncmp("[", tok->str, 1)) {
         Node *base = ret;
         expect("[", rest);
         Node *offset = expr(rest);
         expect("]", rest);
-        if (base->type->ty == INT && offset->type->ty == INT) {
+        if (base->type->ptr_to == NULL && offset->type->ptr_to == NULL) {
             error_at((*rest)->str, (*rest)->pos, "配列型ではありません。");
         }
         Node *right = new_node_binary(ND_ADD, base, offset);
         ret = new_node_binary(ND_DEREF, NULL, right);
-        if(base->type->ty == ARRAY) {
+        if(base->type->ptr_to != NULL) {
             right->type = base->type;
             ret->type = base->type->ptr_to;
         } else {

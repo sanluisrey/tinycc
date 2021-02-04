@@ -34,8 +34,6 @@ assert() {
   fi
 }
 
-<< COMMENTOUT
-COMMENTOUT
 assert 0 'int main(){ return 0; }'
 assert 42 'int main(){ return 42; }'
 assert 21 'int main(){ return 5+20-4; }'
@@ -351,6 +349,14 @@ y = 4;
 return x[0] + x[1] + y;
 }
 '
+# string literal
+assert 97 'int main() { return "abc"[0]; }'
+assert 98 'int main() { return "abc"[1]; }'
+assert 99 'int main() { return "abc"[2]; }'
+assert 0 'int main() { return "abc"[3]; }'
+assert 97 'int main(){char *x; x = "abc"; return *x; }'
+assert 97 'int main() { char *x; x ="abc"; return x[0]; }'
+assert 98 'int main() { char *x; x ="abc"; return x[1]; }'
 
 echo OK
 
