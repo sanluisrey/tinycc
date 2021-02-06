@@ -363,5 +363,11 @@ assert 1 'int main() { return sizeof(""); }'
 assert 4 'int main() { return sizeof("abc"); }'
 assert 4 'int main() { return sizeof("abc"); }'
 TODO
+
+# comment
+assert 2 'int main() { /* return 1; */ return 2; }'
+assert 2 'int main() { // return 1;
+return 2; }'
+
 echo OK
 

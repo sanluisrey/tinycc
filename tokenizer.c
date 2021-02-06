@@ -132,6 +132,24 @@ static Token *tokenize(char *filename, char *p){
             p++;
             continue;
         }
+        // 行コメントをスキップ
+        if (!strncmp(p, "//", 2)) {
+            p += 2;
+            while (*p != '\n') {
+                p++;
+            }
+            continue;
+        }
+        // ブロックコメントをスキップ
+        if (!strncmp(p, "/*", 2)) {
+            p += 2;
+            char *q = strstr(p, "*/");
+            if (q == NULL) {
+                error_at(p, "ブロックコメントが閉じられていません。");
+            }
+            p = q + 2;
+            continue;
+        }
         if (!strncmp(p, ">=", 2) || !strncmp(p, "<=", 2) || !strncmp(p, "==", 2) || !strncmp(p, "!=", 2)) {
             cur = new_token(TK_RESERVED, cur, p, 2);
             p += 2;
