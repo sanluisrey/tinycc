@@ -75,7 +75,7 @@ bool consume(char *op, Token **rest){
 void expect(char *op, Token **rest){
     Token *token = *rest;
     if (token->kind != TK_RESERVED || strncmp(token->str, op, strlen(op)) != 0) {
-        error_at(token->str, token->pos, "'%s'ではありません", op);
+        error_tok(token, "'%s'ではありません", op);
     }
     *rest = token->next;
 }
@@ -85,7 +85,7 @@ void expect(char *op, Token **rest){
 int expect_number(Token **rest){
     Token *token = *rest;
     if (token->kind != TK_NUM) {
-        error_at(token->str,token->pos, "数ではありません");
+        error_tok(token, "数ではありません");
     }
     int val = token->val;
     *rest = token->next;
@@ -102,7 +102,7 @@ Var *find_var(Token *tok) {
         }
     }
     if (cur == NULL) {
-        error_at(tok->str, tok->pos, "Undeclared identifier used");
+        error_tok(tok, "Undeclared identifier used");
     }
     if (!cur->used) {
         cur->used = true;
@@ -124,7 +124,7 @@ void lvarDecl(Token *tok, Type *type){
     Var *cur = NULL;
     for (cur = locals; cur != NULL; cur = cur->next) {
         if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0 && cur->global == false) {
-            error_at(tok->str, tok->pos, "Duplicated declaration");
+            error_tok(tok, "Duplicated declaration");
         }
     }
     if (locals == NULL) {
@@ -158,7 +158,7 @@ void lvarDecl(Token *tok, Type *type){
 void glvarDecl(Token *tok, Type *type){
     for (Var *cur = globals; cur != NULL; cur = cur->next) {
         if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
-            error_at(tok->str, tok->pos, "Duplicated declaration");
+            error_tok(tok, "Duplicated declaration");
         }
     }
     if (globals == NULL) {
@@ -226,7 +226,7 @@ void pvarDecl(Node *args, Token *tok) {
     Var *cur = NULL;
     for (cur = locals; cur != NULL; cur = cur->next) {
         if (strlen(args->name) == cur->len && strncmp(args->name, cur->str, cur->len) == 0) {
-            error_at(tok->str, tok->pos, "Duplicated declaration");
+            error_tok(tok, "Duplicated declaration");
         }
     }
     if (locals == NULL) {
@@ -301,7 +301,7 @@ bool consume_token(TokenKind kind, Token **rest) {
 void expect_token(TokenKind kind, Token **rest) {
     Token *token = *rest;
     if (token->kind != kind) {
-        error_at(token->str, token->pos, "期待したトークン種類ではありません");
+        error_tok(token, "期待したトークン種類ではありません");
     }
     *rest = token->next;
 }
@@ -508,7 +508,7 @@ Type *type_prim(Token **rest){
         } else {
             type->ty = INT;
         }
-    } else error_at(tok->str, tok->pos, "型がありません。");
+    } else error_tok(tok, "型がありません。");
     return RefType(rest, type);
 };
 
@@ -582,7 +582,7 @@ Node *p_list(Token **rest, int depth){
 Node *p_decl(Token **rest){
     Type *type = type_prim(rest);
     Token *tok = *rest;
-    if (tok->kind != TK_IDENT) error_at(tok->str, tok->pos, "識別子ではありません。");
+    if (tok->kind != TK_IDENT) error_tok(tok, "識別子ではありません。");
     Node *var = calloc(1, sizeof(Node));
     var->name = tok->str;
     var->type = type;
@@ -604,7 +604,7 @@ Function *func_def(Token **rest){
     stack_size = ret->nparams * 8;
     while (!consume("}", rest)) {
         Token *tok = *rest;
-        if(at_eof(tok)) error_at(tok->str, tok->pos, "'}'がありません。");
+        if(at_eof(tok)) error_tok(tok, "'}'がありません。");
         decl_list(rest, 0);
         cur->next = stmt_list(rest);
         cur = tail;
@@ -620,7 +620,7 @@ Node *block(Token **rest){
     Node *cur = &head;
     while (!consume("}", rest)) {
         Token *tok = *rest;
-        if(at_eof(tok)) error_at(tok->str, tok->pos, "'}'がありません。");
+        if(at_eof(tok)) error_tok(tok, "'}'がありません。");
         decl_list(rest, 0);
         cur->next = stmt_list(rest);
         cur = tail;
@@ -631,7 +631,7 @@ Node *block(Token **rest){
 void decl_list(Token **rest, int depth) {
     Token *tok = *rest;
     if (tok->kind != TK_TYPE) return;
-    if(at_eof(tok)) error_at(tok->str, tok->pos, "';'がありません。");
+    if(at_eof(tok)) error_tok(tok, "';'がありません。");
     decl(rest, false); // TODO global variable
     expect(";", rest);
     decl_list(rest, depth + 1);
@@ -820,7 +820,7 @@ Node *unary(Token **rest) {
     } else if (consume("*",rest)) {
         Node *right = unary(rest);
         ret = new_node_binary(ND_DEREF, NULL, right);
-        if(!right->type->ty) error_at((*rest)->str, (*rest)->pos, "ポインタ型ではありません。");
+        if(!right->type->ty) error_tok(*rest, "ポインタ型ではありません。");
         ret->type = right->type->ptr_to;
         return ret;
     } else if (consume("&",rest)) {
@@ -835,7 +835,7 @@ Node *unary(Token **rest) {
     } else if (consume("-",rest)) {
         Node *right = primary(rest);
         ret = new_node_binary(ND_SUB, new_node_num(0), right);
-        if(right->type->ty) error_at((*rest)->str, (*rest)->pos, "int型ではありません。");
+        if(right->type->ty) error_tok(*rest, "int型ではありません。");
         ret->type = right->type;
         return ret;
     }
@@ -861,7 +861,7 @@ Node *primary(Token **rest) {
             consume("(", rest);
             ret->args = arg_list(rest, 0);
             if(ret->args != NULL && ret->args->ireg > 6) {
-                error_at((*rest)->str, (*rest)->pos, "引数が6個より多いです。\n");
+                error_tok(*rest, "引数が6個より多いです。\n");
             }
             expect(")", rest);
             return ret;
@@ -881,7 +881,7 @@ Node *primary(Token **rest) {
         Node *offset = expr(rest);
         expect("]", rest);
         if (base->type->ptr_to == NULL && offset->type->ptr_to == NULL) {
-            error_at((*rest)->str, (*rest)->pos, "配列型ではありません。");
+            error_tok(*rest, "配列型ではありません。");
         }
         Node *right = new_node_binary(ND_ADD, base, offset);
         ret = new_node_binary(ND_DEREF, NULL, right);

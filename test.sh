@@ -21,7 +21,7 @@ assert() {
   expected="$1"
   input="$2"
 
-  ./tinycc "$input" > tmp.s || exit
+  echo "$input" | ./tinycc - > tmp.s || exit
   cc -o tmp tmp.s tmp2.o
   ./tmp
   actual="$?"
@@ -357,6 +357,11 @@ assert 0 'int main() { return "abc"[3]; }'
 assert 97 'int main(){char *x; x = "abc"; return *x; }'
 assert 97 'int main() { char *x; x ="abc"; return x[0]; }'
 assert 98 'int main() { char *x; x ="abc"; return x[1]; }'
-
+<< TODO
+assert 0 'int main() { return ""[0]; }'
+assert 1 'int main() { return sizeof(""); }'
+assert 4 'int main() { return sizeof("abc"); }'
+assert 4 'int main() { return sizeof("abc"); }'
+TODO
 echo OK
 

@@ -14,15 +14,6 @@ static int stackpos = 0;
 // 関数の戻り先のラベル
 static char *label;
 
-// エラーを報告する
-void error(char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    vfprintf(stderr, fmt, ap);
-    fprintf(stderr, "\n");
-    exit(1);
-}
-
 // 制御構文のラベルの番号づけ
 int count(void) {
     static int i = 1;

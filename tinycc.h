@@ -7,7 +7,7 @@
 
 #ifndef tinycc_h
 #define tinycc_h
-
+#define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <errno.h>
 
 // トークンの種類
 typedef enum {
@@ -42,11 +43,12 @@ struct Token {
     char *str;      // トークン文字列
     int len;        // トークン文字列の長さ
     int pos;        // 入力文字列でのトークン文字列の位置
+    char *loc;
 };
 
 // 入力文字列pをトークナイズしてそれを返す
 // tokenizer.c
-Token *tokenize(char *p);
+Token *tokenize_file(char *path);
 
 // 型
 typedef struct Type Type;
@@ -154,6 +156,7 @@ void codegen(Function *prog);
 
 // エラーメッセージ(汎用)出力
 // tokenizer.c
-void error_at(char *loc, int pos, char *fmt, ...);
+void error_tok(Token *tok, char *fmt, ...);
+void error(char *fmt, ...);
 
 #endif /* tinycc_h */

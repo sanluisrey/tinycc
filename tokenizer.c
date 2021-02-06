@@ -10,16 +10,91 @@
 // 入力プログラム
 static char *user_input;
 
-// エラーを報告する
-void error_at(char *loc, int pos, char *fmt, ...) {
-    fprintf(stderr,"%s\n", user_input);
-    fprintf(stderr,"%*s",pos,  " ");
+// 入力ファイル名
+static char *current_filename;
+
+void error(char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  vfprintf(stderr, fmt, ap);
+  fprintf(stderr, "\n");
+  exit(1);
+}
+char test[] = "int main(){return 0;}";
+// エラーの起きた場所を報告するための関数
+// 下のようなフォーマットでエラーメッセージを表示する
+//
+// foo.c:10: x = y + + 5;
+//                   ^ 式ではありません
+void verror_at(char *loc , char *fmt, va_list ap) {
+    char *line = loc;
+    while (user_input < line && line[-1] != '\n') {
+        line--;
+    }
+    char *end = loc;
+    while (*end != '\n') {
+        end++;
+    }
+    
+    int line_num = 1;
+    for (char *p = user_input; p < line; p++) {
+        if (*p == '\n') {
+            line_num++;
+        }
+    }
+    
+    int indent = fprintf(stderr, "%s:%d: ",current_filename, line_num);
+    fprintf(stderr, "%.*s\n",(int)(end - line), line);
+    
+    int pos = loc - line + indent;
+    fprintf(stderr, "%*s", pos, "");
     fprintf(stderr, "^ ");
-    va_list ap;
-    va_start(ap, fmt);
     vfprintf(stderr, fmt, ap);
     fprintf(stderr, "\n");
     exit(1);
+}
+
+void error_at(char *loc, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  verror_at(loc, fmt, ap);
+}
+
+void error_tok(Token *tok, char *fmt, ...) {
+  va_list ap;
+  va_start(ap, fmt);
+  verror_at(tok->loc, fmt, ap);
+}
+
+static char *read_file(char *path) {
+    FILE *fp;
+    if (strcmp(path, "-") == 0) {
+        fp = stdin;
+    } else {
+        fp = fopen(path, "r");
+        if (!fp) {
+            error("cannot open %s: %s", path, strerror(errno));
+        }
+    }
+    char *buf;
+    size_t buffer_size;
+    FILE *out = open_memstream(&buf, &buffer_size);
+    
+    for (;;) {
+        char buf2[4096];
+        int n = fread(buf2, 1, sizeof(buf2), fp);
+        if (n == 0)
+          break;
+        fwrite(buf2, 1, n, out);
+    }
+    fflush(out);
+    if (buffer_size == 0 || buf[buffer_size - 1] != '\n') {
+        fputc('\n', out);
+    }
+    fputc('\0', out);
+    if(fp != stdin) fclose(fp);
+    fclose(out);
+    return buf;
 }
 
 // トークンを構成する文字かどうかを返す。
@@ -39,12 +114,14 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len){
     tok->kind = kind;
     tok->len = len;
     tok->pos = str - user_input;
+    tok->loc = str;
     cur->next = tok;
     return tok;
 }
 
 //入力文字列pをトークナイズしてそれを返す
-Token *tokenize(char *p){
+static Token *tokenize(char *filename, char *p){
+    current_filename = filename;
     user_input = p;
     Token head;
     head.next = NULL;
@@ -116,7 +193,7 @@ Token *tokenize(char *p){
         if (strncmp(p, "\"", 1) == 0) {
             char *q = ++p;
             while (strncmp(p, "\"", 1) != 0) {
-                if(*p == EOF || strncmp(p, "\n", 1) == 0) error_at(p, p - user_input, "\"がありません。");
+                if(*p == EOF || strncmp(p, "\n", 1) == 0) error_at(p, "\"がありません。");
                 p++;
             }
             int len = p - q;
@@ -133,8 +210,12 @@ Token *tokenize(char *p){
             cur = new_token(TK_IDENT, cur, q, len);
             continue;
         }
-        error_at(p, p - user_input, "トークナイズできません");
+        error_at(p, "トークナイズできません");
     }
     new_token(TK_EOF, cur, p, 1);
     return head.next;
+}
+
+Token *tokenize_file(char *path) {
+  return tokenize(path, read_file(path));
 }
