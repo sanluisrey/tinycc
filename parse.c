@@ -188,25 +188,28 @@ void varDecl(Token *tok, Type *type, bool global){
 
 // 文字列リストへの登録
 Token *strDecl(Token *tok) {
+    Token *last = literals;
     for (Token *cur = literals; cur != NULL; cur = cur->next) {
         if (tok->len == cur->len && strncmp(tok->str, cur->str, tok->len) == 0) {
             return cur;
         }
+        last = cur;
     }
     if (literals == NULL) {
         literals = calloc(1, sizeof(Token));
         literals->str = tok->str;
         literals->len = tok->len;
         literals->pos = 1;
+        last = literals;
     } else {
         Token *new = calloc(1, sizeof(Token));
         new->str = tok->str;
         new->len = tok->len;
-        new->pos = literals->pos + 1;
-        literals->next = new;
-        literals = new;
+        new->pos = last->pos + 1;
+        last->next = new;
+        last = new;
     }
-    return literals;
+    return last;
 }
 
 // 1次型式のパース TODO char*
