@@ -1,0 +1,11 @@
+#include <stdlib.h>
+#include <stdio.h>
+
+void assert(int expected, int actual) {
+  if (expected == actual) {
+    printf("actual: %d\n", actual);
+  } else {
+    printf("act:%d ex:%d\n", actual, expected);
+    exit(1);
+  }
+}
