@@ -120,6 +120,8 @@ void gen(Node *node){
             gen_lval(node);
             return;
         }
+        case ND_NULL:
+            return;
     }
     gen(node->right); //rdi
     push();
@@ -267,7 +269,7 @@ void glblgen(Var *globals) {
     }
     printf(".zero %d\n", size);
 }
-
+// TODO 長い文字列対応
 void strgen(Token *literals) {
     for (Token *cur = literals; cur != NULL; cur = cur->next) {
         printf(".LC%d:\n", cur->pos);

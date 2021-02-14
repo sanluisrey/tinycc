@@ -17,6 +17,13 @@
 #include <assert.h>
 #include <errno.h>
 
+#define isarray(t)    (t->ty == ARRAY)
+#define isfunc(t)     (t->ty == FUNCTION)
+#define isptr(t)      (t->ty == PTR)
+#define isint(t)      (t->ty == INT)
+#define ischar(t)     (t->ty == CHAR)
+#define iscint(t)     ((t->ty == CHAR) || (t->ty == INT))
+
 // トークンの種類
 typedef enum {
     TK_RESERVED,    // 記号
@@ -53,11 +60,20 @@ Token *tokenize_file(char *path);
 // 型
 typedef struct Type Type;
 
+typedef enum {
+    INT,
+    PTR,
+    ARRAY,
+    CHAR
+} TypeKind;
+
 struct Type {
-    enum { INT, PTR, ARRAY, CHAR} ty;
+    TypeKind ty;
     struct Type *ptr_to;    // 型リスト
-    size_t array_size;
+    size_t array_size;      // 配列のサイズ
+    size_t size;
 };
+
 
 typedef struct Var Var;
 
@@ -74,6 +90,7 @@ struct Var {
 
 // 抽象構文木のノードの種類
 typedef enum {
+    ND_NULL,    // 式なし
     ND_ADD,     // +
     ND_SUB,     // -
     ND_MUL,     // *
@@ -145,9 +162,68 @@ struct Function {
 // parse.c
 Function *parse(Token **rest);
 Function *program(Token **rest);
+extern void decltn_lst(Token **rest);
+extern Type *decltn_spcf(Token **rest);
+extern Type *type_spcf(Token **rest, Token *tok);
 
-// 抽象構文木の配列
-extern Node *code[100];
+// 抽象構文木の部分木のヘッダー
+extern Node head;
+
+// 抽象構文木の部分木の末尾
+extern Node *tail;
+
+extern bool equal_tk(TokenKind kind, Token **rest);
+extern bool equal(char *op, Token **rest);
+extern bool consume(char *op, Token **rest);
+extern void expect(char *op, Token **rest);
+extern int expect_number(Token **rest);
+
+extern Var *find_var(Token *tok);
+extern void lvarDecl(Token *tok, Type *type);
+extern void glvarDecl(Token *tok, Type *type);
+extern void varDecl(Token *tok, Type *type, bool global);
+extern Token *strDecl(Token *tok);
+extern Type *RefType(Token **rest, Type *type);
+extern void pvarDecl(Node *args, Token *tok);
+extern bool consume_ident(Token **rest, int *offset);
+extern bool at_eof(Token *token);
+extern bool consume_token(TokenKind kind, Token **rest);
+extern void expect_token(TokenKind kind, Token **rest);
+
+extern void decl_list(Token **rest, int depth);
+
+//stmt.c
+extern Node *stmt(Token **rest);
+extern Node *expr_stmt(Token **rest);
+extern Node *cmp_stmt(Token **rest);
+extern Node *stmt_lst(Token **rest, Token *tok);
+extern Node *select_stmt(Token **rest);
+extern Node *iter_stmt(Token **rest);
+extern Node *jump_stmt(Token **rest);
+
+//expr.c
+extern Node *new_node_binary(NodeKind kind,Type *ty, Node *lhs, Node *rhs);
+extern Node *new_node_num(int val);
+extern Node *new_node_var(Var *var);
+
+extern Node *expr(Token **rest);
+extern Node *assign(Token **rest);
+extern Node *equality(Token **rest);
+extern Node *relational(Token **rest);
+extern Node *add(Token **rest);
+extern Node *mul(Token **rest);
+extern Node *unary(Token **rest);
+extern Node *postfix(Token **rest);
+extern Node *primary(Token **rest);
+extern Node *arg_list(Token **rest, int depth);
+
+// type.c
+extern Type *ptr(Type *ty);
+extern Type *deref(Type *ty);
+extern Type *array(Type *ty);
+extern Type *atop(Type *ty);    // 配列をポインタに変換
+extern int type_size(Type *type);
+extern Type *type(int op, Type *operand);
 
 // アセンブリの出力
 // codegen.c

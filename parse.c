@@ -17,10 +17,10 @@ static Var *globals;
 static int stack_size;
 
 // 抽象構文木の部分木のヘッダー
-static Node head;
+Node head;
 
 // 抽象構文木の部分木の末尾
-static Node *tail;
+Node *tail;
 
 // 配列型のポインタレコードの末尾
 static Type *ty_recar;
@@ -30,7 +30,6 @@ static Token *literals;
 
 // パーサーの宣言
 static Function *glbl_def(Token **rest);
-//static Type *type_expr(Token **rest);
 static Type *size_list(Token **rest);
 static Type *array_sz(Token **rest);
 static Type *type_prim(Token **rest);
@@ -39,24 +38,18 @@ static Function *f_head(Token **rest);
 static Node *p_list(Token **rest, int depth);
 static Node *p_decl(Token **rest);
 static Function *func_def(Token **rest);
-static void decl_list(Token **rest, int depth);
-static Node *stmt_list(Token **rest);
-static Node *stmt(Token **rest);
-static Node *expr(Token **rest);
-static Node *assign(Token **rest);
-static Node *equality(Token **rest);
-static Node *relational(Token **rest);
-static Node *add(Token **rest);
-static Node *mul(Token **rest);
-static Node *unary(Token **rest);
-static Node *primary(Token **rest);
-static Node *arg_list(Token **rest, int depth);
 
 // 次のトークンが引数の記号と等しいかどうか真偽を返す。
 bool equal(char *op, Token **rest) {
     Token *token = *rest;
     if(token->len != strlen(op)) return false;
     return strncmp(token->str, op, strlen(op)) == 0;
+}
+
+// 次のトークンが引数の記号と等しいかどうか真偽を返す。
+bool equal_tk(TokenKind kind, Token **rest) {
+    Token *token = *rest;
+    return token->kind == kind;
 }
 
 // 次のトークンが期待している記号の時には、トークンを一つ読み進めて
@@ -102,7 +95,8 @@ Var *find_var(Token *tok) {
         }
     }
     if (cur == NULL) {
-        error_tok(tok, "Undeclared identifier used");
+        //error_tok(tok, "Undeclared identifier used");
+        return NULL;
     }
     if (!cur->used) {
         cur->used = true;
@@ -251,22 +245,12 @@ void pvarDecl(Node *args, Token *tok) {
     }
 }
 
-// 引数の型のサイズを求める。
-int type_size(Type *type) {
-    switch (type->ty) {
-        case INT:
-            return 4;
-            
-        case PTR:
-            return 8;
-            
-        case ARRAY:{
-            return (int) type->array_size * type_size(type->ptr_to);
-        }
-            
-        case CHAR:
-            return 1;
-    }
+// トークンから型構造体を作成し、一つ読み進める
+Type *new_type(TypeKind ty, Token **rest, Token *tok) {
+    Type *ret = calloc(1, sizeof(Type));
+    ret->ty = ty;
+    *rest = tok->next;
+    return ret;
 }
 
 // 次のトークンの種類がTK_IDENTの時には、ローカル変数リストを検索し、トークンを一つ読み進めて
@@ -309,174 +293,87 @@ void expect_token(TokenKind kind, Token **rest) {
     *rest = token->next;
 }
 
-Node *new_node_binary(NodeKind kind, Node *lhs, Node *rhs) {
-    if (kind == ND_ADD || kind == ND_SUB) {
-        if (lhs->type && (lhs->type->ty == PTR || lhs->type->ty == ARRAY)) {
-            Type *ty = lhs->type->ptr_to;
-            if (ty->ty == PTR) {
-                rhs->val *= 8;
-            } else if(ty->ty == CHAR){
-                rhs->val *= 1;
-            } else {
-                rhs->val *= 4;
-            }
-            if (lhs->type->ty == ARRAY) {
-                Type *next = lhs->type->ptr_to;
-                if(next->ty == ARRAY) rhs->val *= next->array_size;
-            }
-        } else if (rhs->type && (rhs->type->ty == PTR || rhs->type->ty == ARRAY)) {
-            Type *ty = rhs->type->ptr_to;
-            if (ty->ty == PTR) {
-                lhs->val *= 8;
-            } else if(ty->ty == CHAR){
-                lhs->val *= 1;
-            } else {
-                lhs->val *= 4;
-            }
-            Type *next = rhs->type->ptr_to;
-            if(next->ty == ARRAY) lhs->val *= next->array_size;
-        }
-    }
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = kind;
-    ret->left = lhs;
-    ret->right = rhs;
-    ret->type = calloc(1, sizeof(Type));
-    return ret;
-}
-
-Node *new_node_num(int val){
-    Node *ret = calloc(1, sizeof(Node));
-    Type *type = calloc(1, sizeof(Type));
-    ret->kind = ND_NUM;
-    ret->val = val;
-    ret->type = type;
-    return ret;
-}
-
-Node *new_node_var(Var *var){
-    Node *ret = calloc(1, sizeof(Node));
-    if (var->global) {
-        ret->kind = ND_GVAR;
-        ret->name = var->str;
-    } else {
-        ret->kind = ND_LVAR;
-        ret->offset = var->offset;
-    }
-    ret->type = var->type;
-    return ret;
-}
-
-Node *new_node_if(Node *cond, Node *body, Node *els){
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_IF;
-    ret->cond = cond;
-    ret->body = body;
-    ret->els = els;
-    return ret;
-}
-
-Node *new_node_for(Node *initialization, Node *cond, Node *step, Node *body){
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_FOR;
-    ret->initialization = initialization;
-    ret->cond = cond;
-    ret->step = step;
-    ret->body = body;
-    return ret;
-}
-
-Node *new_node_while(Node *cond, Node *body){
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_WHILE;
-    ret->cond = cond;
-    ret->body = body;
-    return ret;
-}
-
-Node *new_node_funccall(Token *tok) {
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_FUNCCALL;
-    ret->name = tok->str;
-    ret->len = tok->len;
-    return ret;
-}
-
-Node *new_node_expr(Node *expr_stmt) {
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_EXPR_STMT;
-    ret->right = expr_stmt;
-    return ret;
-}
-
-Node *new_node_str(Token *tok) {
-    Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_STR;
-    ret->name = tok->str;
-    ret->offset = strDecl(tok)->pos;
-    Type *type = calloc(1, sizeof(Type));
-    Type *ptr_to = calloc(1, sizeof(Type));
-    ptr_to->ty = CHAR;
-    type->ty = ARRAY;
-    type->ptr_to = ptr_to;
-    type->array_size = tok->len;
-    ret->type = type;
-    return ret;
-}
-
-// 生成規則(TODO)
-// program    = glbl_decl
-// glbl_def   =
-//            = glbl_def func_def
-//            = glbl_def decl ";"
-// type_expr  = type_prim
-//            | type_prim size_list
-// type_prim  = type
-//            = type_prim '*'
-// size_list  = array_sz
-//            | array_sz size_list
-// array_sz   = "[" "]"
-//            | "[" num "]"
-// decl       = type_prim ident
-//            | type_prim ident size_list
-//            | type f_head (TODO)
-//            | decl "," ident (TODO)
-//            | decl "," f_head (TODO)
-// f_head     = ident "(" p_list ")"
-// p_list     =
-//            | p_decl
-//            | p_list ',' p_decl
-// p_decl     = type_expr ident ";"
-// func_def   = type f_head "{"     //TODO 型 全てint
-//                  decl_list
-//                  st_list "}"
-// block      = "{" decl_list st_list "}"
-// decl_list  =
-//            | decl_list decl ';'
-// st_list    = stmt*
-// stmt       = block
-//            | expr ";"
-//            | "if" "(" expr ")" stmt ("else" stmt)?
-//            | "while" "(" expr ")" stmt
-//            | "for" "(" expr? ";" expr? ";" expr? ")" stmt
-//            | "return" expr ";"
-// expr       = assign  // TODO 型
-// assign     = equality ("=" assign)?
-// equality   = relational ("==" relational | "!=" relational)*
-// relational = add ("<" add | "<=" add | ">" add | ">=" add)*
-// add        = mul ("+" mul | "-" mul)*
-// mul        = unary ("*" unary | "/" unary)*
-// unary      = "sizeof" unary
-//            | "+"? primary
-//            | "-"? primary
-//            | "*" unary
-//            | "&" unary
-// primary    = "(" expr ")" | ident "(" arg_list ")" | num | primary "[" expr "]"
-//            | string
-// arg_list   =
-//            | expr
-//            | arg_list "," expr
-
+/*
+ 生成規則(TODO) K&R bookに合わせる
+ trns_unit      =   ex_decltn
+                |   trns_unit ex_decltn
+ ex_decltn      =   func_def
+                |   decltn
+ func_def       =   decltn_spcf? decltr decltn_list? cmp_stmt
+ decltn         =   decltn_spcf ini_decltr_lst? ";"                type.c
+ decltn_list    =   decltn                                      type.c
+                |   decltn_list decltn
+ decltn_spcf    =   type_spcf decltn_spcf? (TODO)               type.c
+ type_spcf      =   char | int  (TODO)                          type.c
+ ini_decltr_lst =   ini_decltr                                  type.c
+                |   ini_decltr_lst ini_decltr
+ ini_decltr     =   decltr
+                |   decltr "=" initzr (TODO)
+ decltr         =   pointer? drct_decltr
+ drct_decltr    =   ident
+                |   "(" decltr ")"
+                |   drct_decltr "[" cnst_expr? "]"
+                |   drct_decltr "(" p_type_lst ")"
+                |   drct_decltr "(" ident_lst? ")"
+ pointer        =   "*"                                         type.c
+                |   pointer (TODO)
+ p_type_lst     =   p_list
+                |   p_list "," "..." (TODO)                     type.c
+ p_list         =   p_decltn                                    type.c
+                |   p_list "," p_decltn
+ p_decltn       =   decltn_spcf decltr                          type.c
+                |   decltn_spcf abst_decltr?
+ ident_lst      =   ident
+                |   ident_lst "," ident
+ initzr         =   assign  (TODO)
+ initzr_lst     (TODO)
+ abst_decltr    =   pointer                                     type.c
+                |   pointer? d_abst_decltr
+ d_abst_decltr  =   "(" abst_decltr ")"                         type.c
+                |   d_abst_decltr? "[" cnst_expr? "]"
+                |   d_abst_decltr? "(" p_type_list ")"
+ stmt           =   expr_stmt
+                |   cmp_stmt
+                |   select_stmt
+                |   jump_stmt
+                |   iter_stmt
+ expr_stmt      =   expr? ";"
+ cmp_stmt       =   "{" decltn_lst? stmt_lst? "}"
+ stmt_lst       =   stmt
+                |   stmt_lst stmt
+ select_stmt    =   "if(" expr ")" stmt
+                |   "if(" expr ")" stmt "else" stmt
+ iter_stmt      =   "while(" expr ")" stmt
+                |   "for(" expr? ";" expr? ";" expr ")" stmt
+ jump_stmt      =   "return" expr? ";"
+ expr           =   assign
+                |   expr "," assign
+ assign         =   cond_expr
+                =   unary assign_op assign
+ assign_op      =   "="
+ cond_expr      =   equality
+ cnst_expr      =   cond_expr
+ equality       =   relational
+                |   equality "==" relational
+                |   equality "!=" relational
+ relational     =   add
+ add            =   mul
+                |   add "+" mul
+                |   add "-" mul
+ mul            =   mul "*" unary
+                |   mul "/" unary
+ unary          =   postfix
+                |   unary_op unary
+                |   "sizeof" unary
+                |   "sizeof" "(" type_name ")"
+ unary_op       =   "&" | "*" | "+" | "-"
+ postfix        =   primary
+                |   postfix "[" expr "]"
+                |   postfix "(" agument_lst? ")"
+ primary        =   ident | string | "(" expr ")"
+ argument_lst   =   assign
+                |   argument_lst "," assign
+ */
 
 Function *program(Token **rest) {
     Function *ret = glbl_def(rest);
@@ -500,6 +397,66 @@ Function *glbl_def(Token **rest) {
     Function *cdr = glbl_def(rest);
     car->next = cdr;
     return car;
+};
+// func_def       =   decltn_spcf? decltr decltn_list? cmp_stmt
+Function *func_def(Token **rest){
+    decltn_spcf(rest);
+    locals = globals;
+    Function *ret = f_head(rest);
+    if (ret == NULL || !equal("{", rest)) {
+        return NULL;
+    }
+    Node head;
+    Node *cur = &head;
+    stack_size = ret->nparams * 8;
+    cur->next = cmp_stmt(rest);
+    ret->code = head.next;
+    ret->locals = locals;
+    ret->stack_size = stack_size;
+    return ret;
+};
+/*
+ decltn_spcf    =   type_spcf decltn_spcf? (TODO)
+ */
+Type *decltn_spcf(Token **rest) {
+    return type_spcf(rest, *rest);
+};
+//type_spcf      =   char | int  (TODO 型の追加)
+Type *type_spcf(Token **rest, Token *tok) {
+    if (equal("char", rest)) {
+        return new_type(CHAR, rest, tok);
+    } else if(equal("int", rest)) {
+        return new_type(INT, rest, tok);
+    } else {
+        return NULL;
+    }
+};
+//decltr         =   pointer? drct_decltr
+
+/*
+drct_decltr    =   ident
+               |   "(" decltr ")"
+               |   drct_decltr "[" cnst_expr? "]"
+               |   drct_decltr "(" p_type_lst ")"
+               |   drct_decltr "(" ident_lst? ")"
+ */
+Function *f_head(Token **rest){
+    Token *tok = *rest;
+    if (tok->kind != TK_IDENT) return NULL;
+    Function *ret = calloc(1, sizeof(Function));
+    ret->name = tok->str;
+    consume_token(TK_IDENT, rest);
+    tok = *rest;
+    if (!consume("(", rest)) {
+        return NULL;
+    }
+    Node *args = p_list(rest, 0);
+    ret->args = args;
+    if(args != NULL) ret->nparams = args->ireg;
+    if (!consume(")", rest)) {
+        return NULL;
+    }
+    return ret;
 };
 // TODO char*
 Type *type_prim(Token **rest){
@@ -547,25 +504,6 @@ void decl(Token **rest, bool global){
     else varDecl(tok, ty_recar, global);
 };
 
-Function *f_head(Token **rest){
-    Token *tok = *rest;
-    if (tok->kind != TK_IDENT) return NULL;
-    Function *ret = calloc(1, sizeof(Function));
-    ret->name = tok->str;
-    consume_token(TK_IDENT, rest);
-    tok = *rest;
-    if (!consume("(", rest)) {
-        return NULL;
-    }
-    Node *args = p_list(rest, 0);
-    ret->args = args;
-    if(args != NULL) ret->nparams = args->ireg;
-    if (!consume(")", rest)) {
-        return NULL;
-    }
-    return ret;
-};
-
 Node *p_list(Token **rest, int depth){
     if(equal(")", rest)) return NULL;
     if(depth) expect(",", rest);
@@ -593,44 +531,6 @@ Node *p_decl(Token **rest){
     return var;
 };
 
-Function *func_def(Token **rest){
-    Token *tok = *rest;
-    if (tok->kind != TK_TYPE) return NULL;;
-    consume_token(TK_TYPE, rest);
-    locals = globals;
-    Function *ret = f_head(rest);
-    if (ret == NULL || !consume("{", rest)) {
-        return NULL;
-    }
-    Node head;
-    Node *cur = &head;
-    stack_size = ret->nparams * 8;
-    while (!consume("}", rest)) {
-        Token *tok = *rest;
-        if(at_eof(tok)) error_tok(tok, "'}'がありません。");
-        decl_list(rest, 0);
-        cur->next = stmt_list(rest);
-        cur = tail;
-    }
-    ret->code = head.next;
-    ret->locals = locals;
-    ret->stack_size = stack_size;
-    return ret;
-};
-
-Node *block(Token **rest){
-    expect("{", rest);
-    Node *cur = &head;
-    while (!consume("}", rest)) {
-        Token *tok = *rest;
-        if(at_eof(tok)) error_tok(tok, "'}'がありません。");
-        decl_list(rest, 0);
-        cur->next = stmt_list(rest);
-        cur = tail;
-    }
-    return head.next;
-}
-
 void decl_list(Token **rest, int depth) {
     Token *tok = *rest;
     if (tok->kind != TK_TYPE) return;
@@ -639,285 +539,4 @@ void decl_list(Token **rest, int depth) {
     expect(";", rest);
     decl_list(rest, depth + 1);
     return;
-}
-
-Node *stmt_list(Token **rest) {
-    Token *tok = *rest;
-    if (at_eof(tok) || tok->kind == TK_TYPE || equal("}", rest)) {
-        return NULL;
-    }
-    Node *car = stmt(rest);
-    Node *cdr = stmt_list(rest);
-    if(cdr == NULL) tail = car;
-    car->next = cdr;
-    return car;
-}
-
-Node *stmt(Token **rest) {
-    Node *ret;
-    while (consume(";", rest)) {
-        continue;
-    }
-    if(equal("{", rest)) {
-        ret = calloc(1, sizeof(Node));
-        ret->kind = ND_BLOCK;
-        ret->right = block(rest);
-        return ret;
-    } else if (consume_token(TK_RETURN, rest)) {
-        Node *right = expr(rest);
-        ret = new_node_binary(ND_RETURN, NULL, right);
-    } else if (consume_token(TK_IF, rest)) {
-        expect("(", rest);
-        Node *cond = expr(rest);
-        expect(")", rest);
-        Node *body = stmt(rest);
-        Node *els = NULL;
-        if (consume_token(TK_ELSE, rest)) {
-            els = stmt(rest);
-        }
-        ret = new_node_if(cond, body, els);
-        return ret;
-    } else if (consume_token(TK_FOR, rest)) {
-        Node *initialization = NULL;
-        Node *cond = NULL;
-        Node *step = NULL;
-        Node *body;
-        expect("(", rest);
-        if (!consume(";", rest)) {
-            initialization = new_node_expr(expr(rest));
-            expect(";", rest);
-        }
-        if (!consume(";", rest)) {
-            cond = expr(rest);
-            expect(";", rest);
-        }
-        if (!consume(")", rest)) {
-            step = expr(rest);
-            expect(")", rest);
-        }
-        body = stmt(rest);
-        ret = new_node_for(initialization, cond, step, body);
-        return ret;
-    } else if (consume_token(TK_WHILE, rest)) {
-        expect("(", rest);
-        Node *cond = expr(rest);
-        expect(")", rest);
-        Node *body = stmt(rest);
-        ret = new_node_while(cond, body);
-        return ret;
-    } else {
-        ret = new_node_expr(expr(rest));
-    }
-    expect(";", rest);
-    return ret;
-}
-
-Node *expr(Token **rest) {
-    return assign(rest);
-};
-
-Node *assign(Token **rest) {
-    Node *ret;
-    Node *left = equality(rest);
-    if (consume("=",rest)) {
-        Node *right = assign(rest);
-        ret = new_node_binary(ND_ASGMT, left, right);
-        ret->type = left->type;
-        return ret;
-    }
-    return left;
-}
-
-Node *equality(Token **rest) {
-    Node *left = relational(rest);
-    Node *ret = left;
-    for (; ; ) {
-        if (consume("==", rest)) {
-            Node *right = relational(rest);
-            ret = new_node_binary(ND_EQ, ret, right);
-            ret->type = calloc(1, sizeof(Type));
-        } else if (consume("!=", rest)) {
-            Node *right = relational(rest);
-            ret = new_node_binary(ND_NE, ret, right);
-            ret->type = calloc(1, sizeof(Type));
-        } else {
-            return ret;
-        }
-    }
-};
-Node *relational(Token **rest) {
-    Node *ret = add(rest);
-    for (; ; ) {
-        if (consume(">=", rest)) {
-            Node *left = add(rest);
-            ret = new_node_binary(ND_GE, left, ret);
-            ret->type = calloc(1, sizeof(Type));
-        } else if (consume("<=", rest)) {
-            Node *right = add(rest);
-            ret = new_node_binary(ND_LE, ret, right);
-            ret->type = calloc(1, sizeof(Type));
-        } else if (consume(">", rest)){
-            Node *left = add(rest);
-            ret = new_node_binary(ND_GT, left, ret);
-            ret->type = calloc(1, sizeof(Type));
-        } else if (consume("<", rest)) {
-            Node *right = add(rest);
-            ret = new_node_binary(ND_LT, ret, right);
-            ret->type = calloc(1, sizeof(Type));
-        } else {
-            return ret;
-        }
-    }
-};
-
-Node *add(Token **rest) {
-    Node *left = mul(rest);
-    Node *ret = left;
-    Type *type = ret->type;
-    for (; ; ) {
-        if (consume("+", rest)) {
-            Node *right = mul(rest);
-            ret = new_node_binary(ND_ADD, ret, right);
-            ret->type = type->ty ? type : right->type;      //TODO type check
-        } else if (consume("-", rest)){
-            Node *right = mul(rest);
-            ret = new_node_binary(ND_SUB, ret, right);
-            ret->type = type->ty ? type : right->type;      //TODO type check
-        } else {
-            return ret;
-        }
-    }
-}
-
-Node *mul(Token **rest) {
-    Node *left = unary(rest);
-    Node *ret = left;
-    for (; ;) {
-        if (consume("*", rest)) {
-            Node *right = unary(rest);
-            ret = new_node_binary(ND_MUL, ret, right);
-            ret->type = right->type;                        //TODO type check
-        } else if (consume("/", rest)){
-            Node *right = unary(rest);
-            ret = new_node_binary(ND_DIV, ret, right);
-            ret->type = right->type;                        //TODO type check
-        } else {
-            return ret;
-        }
-    }
-}
-
-Node *unary(Token **rest) {
-    Node *ret;
-    if (consume_token(TK_SIZEOF, rest)) {
-        Node *right = unary(rest);
-        int size = type_size(right->type);
-        if (right->kind == ND_MUL) {
-            size *= right->val;
-        }
-        if (right->kind == ND_DIV) {
-            size /= right->val;
-        }
-        ret = new_node_num(size);
-        return ret;
-    } else if (consume("*",rest)) {
-        Node *right = unary(rest);
-        ret = new_node_binary(ND_DEREF, NULL, right);
-        if(!right->type->ty) error_tok(*rest, "ポインタ型ではありません。");
-        ret->type = right->type->ptr_to;
-        return ret;
-    } else if (consume("&",rest)) {
-        Node *right = unary(rest);
-        ret = new_node_binary(ND_ADDR, NULL, right);
-        ret->type->ty = PTR;
-        ret->type->ptr_to = right->type;
-        return ret;
-    }
-    if (consume("+",rest)) {
-        return primary(rest);
-    } else if (consume("-",rest)) {
-        Node *right = primary(rest);
-        ret = new_node_binary(ND_SUB, new_node_num(0), right);
-        if(right->type->ty) error_tok(*rest, "int型ではありません。");
-        ret->type = right->type;
-        return ret;
-    }
-    return primary(rest);
-}
-//primary    = "(" expr ")" | ident "(" arg_list ")" | num | primary "[" expr "]" | string
-Node *primary(Token **rest) {
-    Token *tok = *rest;
-    Node *ret;
-    if (consume("(",rest)) {
-        ret = expr(rest);
-        expect(")",rest);
-    } else if(tok->kind == TK_STR) {
-        *rest = tok->next;
-        ret = new_node_str(tok);
-    } else if (tok->kind == TK_IDENT) {
-        tok = tok->next;
-        // 関数呼び出しのパース
-        if (tok->len == 1 && strncmp(tok->str, "(", 1) == 0) {
-            Node *ret = new_node_funccall(*rest);       // TODO register return type
-            ret->type = calloc(1, sizeof(Type));
-            consume_token(TK_IDENT, rest);
-            consume("(", rest);
-            ret->args = arg_list(rest, 0);
-            if(ret->args != NULL && ret->args->ireg > 6) {
-                error_tok(*rest, "引数が6個より多いです。\n");
-            }
-            expect(")", rest);
-            return ret;
-        } else {
-            Var *var = find_var(*rest);
-            ret = new_node_var(var);
-            consume_token(TK_IDENT, rest);
-        }
-    } else {
-        ret = new_node_num(expect_number(rest));
-    }
-    // 配列のパース TODO 多次元配列 型登録
-    tok = *rest;
-    while (!strncmp("[", tok->str, 1)) {
-        Node *base = ret;
-        expect("[", rest);
-        Node *offset = expr(rest);
-        expect("]", rest);
-        if (base->type->ptr_to == NULL && offset->type->ptr_to == NULL) {
-            error_tok(*rest, "配列型ではありません。");
-        }
-        Node *right = new_node_binary(ND_ADD, base, offset);
-        ret = new_node_binary(ND_DEREF, NULL, right);
-        if(base->type->ptr_to != NULL) {
-            right->type = base->type;
-            ret->type = base->type->ptr_to;
-        } else {
-            right->type = offset->type;
-            ret->type = offset->type->ptr_to;
-        }
-        tok = *rest;
-    }
-    return ret;
-}
-
-Node *arg_list(Token **rest, int depth){
-    Token *tok = *rest;
-    if (tok->len == 1 && strncmp(tok->str, ")", 1) == 0) return NULL;
-    expr(rest);  //トークンを1単位進める
-    char *name = tok->str;
-    if (!equal(",", rest)) {
-        head.next = expr(&tok); // 前のトークン
-        Node *car = head.next;
-        car->ireg = ++depth;
-        car->name = name;
-        return car;
-    }
-    expect(",", rest);
-    Node *cdr = arg_list(rest, depth + 1);
-    Node *car = expr(&tok); // 前のトークン
-    car->ireg = depth + 1;
-    car->name = name;
-    cdr->next = car;
-    if(depth) return car;
-    return head.next;
 }
