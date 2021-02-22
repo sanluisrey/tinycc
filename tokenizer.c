@@ -20,7 +20,6 @@ void error(char *fmt, ...) {
   fprintf(stderr, "\n");
   exit(1);
 }
-char test[] = "int main(){return 0;}";
 // エラーの起きた場所を報告するための関数
 // 下のようなフォーマットでエラーメッセージを表示する
 //
@@ -126,6 +125,8 @@ static Token *tokenize(char *filename, char *p){
     Token head;
     head.next = NULL;
     Token *cur = &head;
+    // 文字列リテラルのラベルを特徴づける連番を表す
+    int cnt = 0;
     
     while (*p) {
         if (isspace(*p)) {
@@ -208,6 +209,7 @@ static Token *tokenize(char *filename, char *p){
             p += 4;
             continue;
         }
+        // 文字列リテラル
         if (strncmp(p, "\"", 1) == 0) {
             char *q = ++p;
             while (strncmp(p, "\"", 1) != 0) {
@@ -216,6 +218,12 @@ static Token *tokenize(char *filename, char *p){
             }
             int len = p - q;
             cur = new_token(TK_STR, cur, q, len);
+            // 記号表への登録
+            Var *s = lookup(cur->str, strings);
+            if(s == NULL) {
+                Var *ret = install(cur->str, &strings, CONST, array(CharType, len + 1));
+                ret->offset = cnt++;
+            }
             p++;
             continue;
         }

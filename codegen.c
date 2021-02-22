@@ -240,7 +240,7 @@ static void gen_stmt(Node *node) {
     }
     error("不正なステートメントです。");
 }
-
+// グローバル変数のラベルのコード生成
 void glblgen(Var *globals) {
     if(globals == NULL) return;
     glblgen(globals->next);
@@ -270,20 +270,24 @@ void glblgen(Var *globals) {
     printf(".zero %d\n", size);
 }
 // TODO 長い文字列対応
-void strgen(Token *literals) {
-    for (Token *cur = literals; cur != NULL; cur = cur->next) {
-        printf(".LC%d:\n", cur->pos);
-        printf("    .string \"%s\"\n", cur->str);
+void gen_const_str() {
+    Var *p = strings->entry;
+    if (p) {
+        do {
+            printf(".LC%d:\n", p->offset);
+            printf("    .string \"%s\"\n", p->str);
+        } while ((p = p->next) != NULL);
     }
 }
 
-void codegen(Function *prog) {
+void codegen(Code *prog) {
     printf(".intel_syntax noprefix\n");
     // 文字列リテラルのコード生成
-    strgen(prog->literals);
-    for (Function *func = prog; func != NULL; func = func->next) {
-        // グローバル変数のコード生成
-        glblgen(prog->globals);
+    gen_const_str();
+    for (int i = prog->n - 1; i >= 0; i--) {
+        Function *func = prog->function[i];
+        // (TODO) グローバル変数のコード生成
+        glblgen(func->globals);
         // 関数のコード生成
         printf(".global %s\n", func->name);
         printf(".text\n");
@@ -291,12 +295,14 @@ void codegen(Function *prog) {
         printf("    mov rax, rbp\n");
         push();
         printf("    mov rbp, rsp\n");
-        for (Node *arg = func->args; arg; arg = arg->next) {
+        
+        for (int j = 0; j < func->nparams; j++) {
+            int index = func->nparams - j - 1;
             printf("    mov rax, rbp\n");
-            printf("    sub rax, %d\n", (arg->ireg)*8);
-            printf("    mov [rax], %s\n", MREGS[arg->ireg - 1]);
+            printf("    sub rax, %d\n", (index + 1)*8);
+            printf("    mov [rax], %s\n", MREGS[index]);
         }
-        // ローカル変数領域の確保
+        // TODO ローカル変数領域の確保
         printf("    sub rsp, %d\n", func->stack_size);
         
         // コードの本体部分の出力

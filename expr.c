@@ -7,18 +7,19 @@
 
 #include "tinycc.h"
 
+Node head;
+
 Node *new_node_num(int val){
     Node *ret = calloc(1, sizeof(Node));
-    Type *type = calloc(1, sizeof(Type));
     ret->kind = ND_NUM;
     ret->val = val;
-    ret->type = type;
+    ret->type = IntType;
     return ret;
 }
 
 Node *new_node_var(Var *var){
     Node *ret = calloc(1, sizeof(Node));
-    if (var->global) {
+    if (var->scope == GLOBAL) {
         ret->kind = ND_GVAR;
         ret->name = var->str;
     } else {
@@ -54,19 +55,13 @@ Node *new_node_funcall(Node *f_head, Node *argument) {
     ret->type = calloc(1, sizeof(Type));
     return ret;
 }
-
-Node *new_node_str(Token *tok) {
+// TODO 文字列リテラルの再実装
+Node *new_node_str(Var *p) {
     Node *ret = calloc(1, sizeof(Node));
     ret->kind = ND_STR;
-    ret->name = tok->str;
-    ret->offset = strDecl(tok)->pos;
-    Type *type = calloc(1, sizeof(Type));
-    Type *ptr_to = calloc(1, sizeof(Type));
-    ptr_to->ty = CHAR;
-    type->ty = ARRAY;
-    type->ptr_to = ptr_to;
-    type->array_size = tok->len;
-    ret->type = type;
+    ret->name = p->str;
+    ret->offset = p->offset;
+    ret->type = p->type;
     return ret;
 }
 
@@ -125,7 +120,7 @@ Node *add_node(NodeKind kind, Node *lhs, Node *rhs) {
     if (isarray(lhs->type)) {
         Type *t = lhs->type->ptr_to;
         if(t->ty == ARRAY) {
-            q = new_node_binary(ND_MUL, q->type, q, new_node_num((int) t->array_size));
+            q = new_node_binary(ND_MUL, q->type, q, new_node_num(t->array_size));
         }
         
     }
@@ -263,15 +258,9 @@ Node *unary(Token **rest) {
     if (consume_token(TK_SIZEOF, rest)) {
         // TODO type->sizeで求める
         Node *right = unary(rest);
-        int size = type_size(right->type);
-        if (right->kind == ND_MUL) {
-            size *= right->val;
-        }
-        if (right->kind == ND_DIV) {
-            size /= right->val;
-        }
-        ret = new_node_num(size);
-        return ret;
+        int size = right->type->size;
+        return new_node_num(size);
+        return NULL;
     } else if (consume("*",rest)) {
         Node *right = unary(rest);
         ret = new_node_binary(ND_DEREF,deref(right->type), NULL, right);
@@ -327,9 +316,11 @@ Node *primary(Token **rest) {
         expect(")",rest);
     } else if(tok->kind == TK_STR) {
         *rest = tok->next;
-        ret = new_node_str(tok);
+        Var *p = lookup(tok->str, strings);
+        if(p == NULL) error("string literal error");
+        ret = new_node_str(p);
     } else if (tok->kind == TK_IDENT) {
-        Var *var = find_var(*rest);
+        Var *var = lookup(tok->str, identifiers);
         if (var == NULL) {
             ret = new_node(*rest);
         } else {

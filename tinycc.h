@@ -23,7 +23,9 @@
 #define isint(t)      (t->ty == INT)
 #define ischar(t)     (t->ty == CHAR)
 #define iscint(t)     ((t->ty == CHAR) || (t->ty == INT))
-
+#define roundup(x,n) (((x)+((n)-1))&(~((n)-1)))
+// スコープ
+enum {CONST, GLOBAL, PARAM, LOCAL};
 // トークンの種類
 typedef enum {
     TK_RESERVED,    // 記号
@@ -64,14 +66,22 @@ typedef enum {
     INT,
     PTR,
     ARRAY,
-    CHAR
+    CHAR,
+    FUNCTION,
 } TypeKind;
 
 struct Type {
     TypeKind ty;
-    struct Type *ptr_to;    // 型リスト
-    size_t array_size;      // 配列のサイズ
-    size_t size;
+    int size;            // 型のサイズ
+    Type *ptr_to;        // 型リスト
+    int array_size;      // 配列の要素数
+    Type *base;          // 配列の最後の参照先の型
+    
+    Token *name;
+    
+    Type *return_ty;
+    Type *p_list;
+    Type *next;
 };
 
 
@@ -86,7 +96,31 @@ struct Var {
     Type *type;      // 変数の型
     bool global;    // グローバル変数かどうか
     bool generated;   // コード生成済みかどうか
+    int scope;
+    char *name;
+    int defined;
 };
+
+typedef struct Scope Scope;
+struct Scope {
+   int level;  // ネストの深さ
+   Scope *previous;
+   Var *entry;
+};
+
+//sym.c
+extern Scope *scope(Scope *p, int level);
+extern Var *install(char *name, Scope **spp, int level, Type *ty);
+extern Var *lookup(char *name, Scope *sp);
+extern void enterscope(void);
+extern void exitscope(void);
+extern void initscope(void);
+extern int getlevel(void);
+extern int getstacksz(Scope *spp, int level);
+//extern Scope ids;
+extern Scope *globals;
+extern Scope *identifiers;
+extern Scope *strings;
 
 // 抽象構文木のノードの種類
 typedef enum {
@@ -143,7 +177,6 @@ struct Node {
     Type *type;     // 型
 };
 
-// プログラム全体を表す
 typedef struct Function Function;
 
 struct Function {
@@ -156,7 +189,16 @@ struct Function {
     int nparams;
     Var *globals;
     Token *literals;
+    Var **params;
 };
+
+// プログラム全体を表す
+typedef struct Code Code;
+struct Code {
+    Function **function;
+    int n;
+};
+
 
 // パーサー
 // parse.c
@@ -165,7 +207,7 @@ Function *program(Token **rest);
 extern void decltn_lst(Token **rest);
 extern Type *decltn_spcf(Token **rest);
 extern Type *type_spcf(Token **rest, Token *tok);
-
+extern Var *dclparam(Token **rest, char *id, Type *ty);
 // 抽象構文木の部分木のヘッダー
 extern Node head;
 
@@ -178,7 +220,7 @@ extern bool consume(char *op, Token **rest);
 extern void expect(char *op, Token **rest);
 extern int expect_number(Token **rest);
 
-extern Var *find_var(Token *tok);
+//extern Var *find_var(Token *tok);
 extern void lvarDecl(Token *tok, Type *type);
 extern void glvarDecl(Token *tok, Type *type);
 extern void varDecl(Token *tok, Type *type, bool global);
@@ -191,7 +233,9 @@ extern bool consume_token(TokenKind kind, Token **rest);
 extern void expect_token(TokenKind kind, Token **rest);
 
 extern void decl_list(Token **rest, int depth);
-
+//decl.c
+extern Code *trns_unit(Token **);
+extern Function *ex_decltn(Token **);
 //stmt.c
 extern Node *stmt(Token **rest);
 extern Node *expr_stmt(Token **rest);
@@ -220,15 +264,29 @@ extern Node *arg_list(Token **rest, int depth);
 // type.c
 extern Type *ptr(Type *ty);
 extern Type *deref(Type *ty);
-extern Type *array(Type *ty);
+extern Type *array(Type *ty, int n);
 extern Type *atop(Type *ty);    // 配列をポインタに変換
 extern int type_size(Type *type);
 extern Type *type(int op, Type *operand);
+extern Type *get_return_ty(Type *ty);
+extern Type *func(Type *ty, Type *proto);
+extern Type *IntType;
+extern Type *CharType;
 
+typedef struct List List;
+struct List {
+    void *x;
+    List *next;
+    List *prev;
+};
+//list.c
+extern List *append(void *x, List *list);
+extern void *ltov(List **list);
+extern int list_length(List *list);
 // アセンブリの出力
 // codegen.c
 void gen(Node *node);
-void codegen(Function *prog);
+void codegen(Code *prog);
 
 // エラーメッセージ(汎用)出力
 // tokenizer.c

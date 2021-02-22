@@ -95,15 +95,22 @@ Node *expr_stmt(Token **rest) {
 // cmp_stmt       =   "{" decltn_lst? stmt_lst? "}"
 Node *cmp_stmt(Token **rest) {
     consume("{", rest);
+    enterscope();
     if (equal_tk(TK_TYPE, rest)) {
-        //decltn_lst(rest);
-        decl_list(rest, 0);
+        //decl_list(rest, 0);
+        ex_decltn(rest);
     }
     if (equal("}", rest)) {
+        if (getlevel() >= LOCAL) {
+            exitscope();
+        }
         return new_node_block(new_node_null());
     } else {
         Node *ret = stmt_lst(rest, *rest);
         expect("}", rest);
+        if (getlevel() >= LOCAL) {
+            exitscope();
+        }
         return new_node_block(ret);
     }
 }
@@ -111,7 +118,7 @@ Node *cmp_stmt(Token **rest) {
 //                |   stmt_lst stmt
 Node *stmt_lst(Token **rest, Token *tok) {
     if (at_eof(tok) || !strncmp("}", tok->str, 1)) return NULL;
-    if (tok->kind == TK_TYPE) decl_list(rest, 0);
+    if (tok->kind == TK_TYPE) ex_decltn(rest); //decl_list(rest, 0);
     Node *car = stmt(rest);
     Node *cdr = stmt_lst(rest, *rest);
     if(cdr != NULL) car->next = cdr;
