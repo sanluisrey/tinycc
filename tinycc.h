@@ -174,6 +174,8 @@ struct Node {
     Node *args;     // 関数呼び出しの引数
     int ireg;       // 関数呼び出しの引数の順序
     
+    Node **params; // 関数呼び出しの仮引数
+    int nparams;    // 関数呼び出しの引数の数
     Type *type;     // 型
 };
 

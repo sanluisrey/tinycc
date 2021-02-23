@@ -8,3 +8,4 @@ tinycc
 .DS_Store
 input.txt
 test.c
+*.exe

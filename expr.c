@@ -58,13 +58,14 @@ Node *new_node_funcall(Node *f_head, Node *argument) {
     ret->type = calloc(1, sizeof(Type));
     return ret;
 }
-// TODO 文字列リテラルの再実装
-Node *new_node_str0(Var *p) {
+
+Node *new_node_funcall0(Node *f_head, Node **argument, int nparams) {
     Node *ret = calloc(1, sizeof(Node));
-    ret->kind = ND_STR;
-    ret->name = p->str;
-    ret->offset = p->offset;
-    ret->type = p->type;
+    ret->kind = ND_FUNCCALL;
+    ret->name = f_head->name;
+    ret->nparams = nparams;
+    ret->params = argument;
+    ret->type = calloc(1, sizeof(Type));
     return ret;
 }
 
@@ -312,12 +313,15 @@ Node *postfix(Token **rest) {
             p = new_node_binary(ND_DEREF, p->type->ptr_to, NULL, p); // TODO p->type->ptr_toが配列のときの検証
         } else if(consume("(", rest)) {
             // TODO 関数の型、定義チェック
-            Node *args = arg_list(rest, 0);
-            if(args != NULL && args->ireg > 6) {
-                error_tok(*rest, "引数が6個より多いです。\n");
+            List *list = NULL;
+            while (!equal(")", rest)) {
+                if(list != NULL) expect(",", rest);
+                list = append(assign(rest), list);
             }
             expect(")", rest);
-            return new_node_funcall(p, args);
+            int nparams = list_length(list);
+            Node **params = ltov(&list);
+            return new_node_funcall0(p, params, nparams);
         } else {
             return p;
         }

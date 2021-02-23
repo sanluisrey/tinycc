@@ -400,6 +400,7 @@ Function *func_defn(Token **rest, char *id, Type *fty, Var *params[]){
     }
     p = lookup(id, identifiers);
     if(p && isfunc(p->type) && p->defined) error("redefinition of %s", id);
+    //install(id, &globals, GLOBAL, fty);
     Function *ret = calloc(1, sizeof(Function));
     ret->code = cmp_stmt(rest);
     // TODO 本来不要なコード

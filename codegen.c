@@ -107,15 +107,14 @@ void gen(Node *node){
             store(node->left->type);
             return;
         case ND_FUNCCALL: {
-            Node *args = node->args;
-            while (args != NULL) {
-                if (args->ireg == 0) {
-                    args = args->next;
-                    continue;
-                }
-                gen(args);
-                printf("    mov %s, rax\n", MREGS[args->ireg - 1]);
-                args = args->next;
+            Node **params = node->params;
+            int ireg = node->nparams;
+            for (int i = 0; i < ireg; i++) {
+                gen(params[i]);
+                push();
+            }
+            for (int i = ireg - 1; i >= 0; i--) {
+                pop(MREGS[i]);
             }
             printf("    call %s\n", node->name);
             return;
