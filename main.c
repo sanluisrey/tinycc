@@ -17,7 +17,6 @@ int main(int argc, char **argv){
     // トークナイズ
     token = tokenize_file(argv[1]);
     // 抽象構文木の作成
-    //Function *prog = program(&token);
     Code *prog = trns_unit(&token);
     // コード生成
     codegen(prog);

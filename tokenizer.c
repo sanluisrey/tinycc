@@ -118,6 +118,40 @@ Token *new_token(TokenKind kind, Token *cur, char *str, int len){
     return tok;
 }
 
+char *string_literal_end(char *p) {
+    while (strncmp(p, "\"", 1) != 0) {
+        if(*p == EOF || strncmp(p, "\n", 1) == 0) error_at(p, "\"がありません。");
+        if (*p == '\\' && *(p + 1) == 'n') {
+            p++;
+        }
+        p++;
+    }
+    return p;
+}
+
+// \nエスケープ文字に対応
+Token *read_string_literal(char **input, Token **tok) {
+    Token *cur = *tok;
+    char *start = *input;
+    char *end = string_literal_end(start + 1);
+    char *buf = calloc(1, end - start);
+    int len = 0;
+    char *p = ++start;
+    while (strncmp(p, "\"", 1) != 0) {
+        if (*p == '\\' && *(p + 1) == 'n') {
+            buf[len++] = '\n';
+            p += 2;
+        } else {
+            buf[len++] = *p++;
+        }
+    }
+    cur = new_token(TK_STR, cur, buf, len);
+    *input = p;
+    *tok = cur;
+    return cur;
+}
+
+
 //入力文字列pをトークナイズしてそれを返す
 static Token *tokenize(char *filename, char *p){
     current_filename = filename;
@@ -125,8 +159,6 @@ static Token *tokenize(char *filename, char *p){
     Token head;
     head.next = NULL;
     Token *cur = &head;
-    // 文字列リテラルのラベルを特徴づける連番を表す
-    int cnt = 0;
     
     while (*p) {
         if (isspace(*p)) {
@@ -211,19 +243,7 @@ static Token *tokenize(char *filename, char *p){
         }
         // 文字列リテラル
         if (strncmp(p, "\"", 1) == 0) {
-            char *q = ++p;
-            while (strncmp(p, "\"", 1) != 0) {
-                if(*p == EOF || strncmp(p, "\n", 1) == 0) error_at(p, "\"がありません。");
-                p++;
-            }
-            int len = p - q;
-            cur = new_token(TK_STR, cur, q, len);
-            // 記号表への登録
-            Var *s = lookup(cur->str, strings);
-            if(s == NULL) {
-                Var *ret = install(cur->str, &strings, CONST, array(CharType, len + 1));
-                ret->offset = cnt++;
-            }
+            read_string_literal(&p, &cur);
             p++;
             continue;
         }

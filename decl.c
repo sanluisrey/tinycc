@@ -383,7 +383,8 @@ Function *func_defn(Token **rest, char *id, Type *fty, Var *params[]){
     consume("{", rest);
     // TODO calleeとcallerで引数の型が異なるときの対応
     // 引数の関数型から返却の型を抽出
-    Type *rty = get_return_ty(fty);
+    Type *rty = NULL;
+    if(fty) rty = get_return_ty(fty);
     if (params) {
         // 引数の数を数える TODO 引数の数が6個より大きい関数への対応
         while (params[n] != NULL) {

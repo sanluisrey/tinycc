@@ -9,6 +9,9 @@
 
 Node head;
 
+// 文字列リテラルのラベルを特徴づける連番を表す
+static int cnt = 0;
+
 Node *new_node_num(int val){
     Node *ret = calloc(1, sizeof(Node));
     ret->kind = ND_NUM;
@@ -19,7 +22,7 @@ Node *new_node_num(int val){
 
 Node *new_node_var(Var *var){
     Node *ret = calloc(1, sizeof(Node));
-    if (var->scope == GLOBAL) {
+    if (var->scope <= GLOBAL) {
         ret->kind = ND_GVAR;
         ret->name = var->str;
     } else {
@@ -56,12 +59,20 @@ Node *new_node_funcall(Node *f_head, Node *argument) {
     return ret;
 }
 // TODO 文字列リテラルの再実装
-Node *new_node_str(Var *p) {
+Node *new_node_str0(Var *p) {
     Node *ret = calloc(1, sizeof(Node));
     ret->kind = ND_STR;
     ret->name = p->str;
     ret->offset = p->offset;
     ret->type = p->type;
+    return ret;
+}
+
+Node *new_node_str(Var *var){
+    Node *ret = calloc(1, sizeof(Node));
+    ret->kind = ND_STR;
+    ret->name = var->str;
+    ret->type = var->type;
     return ret;
 }
 
@@ -126,6 +137,13 @@ Node *add_node(NodeKind kind, Node *lhs, Node *rhs) {
     }
     return new_node_binary(kind, lhs->type, lhs, q);
     
+}
+
+// 文字列リテラルを一意のラベルに変換
+static char *new_unique_name(void) {
+  char *buf = calloc(1, 20);
+  sprintf(buf, ".L..%d", cnt++);
+  return buf;
 }
 
 /*
@@ -256,7 +274,6 @@ Node *mul(Token **rest) {
 Node *unary(Token **rest) {
     Node *ret;
     if (consume_token(TK_SIZEOF, rest)) {
-        // TODO type->sizeで求める
         Node *right = unary(rest);
         int size = right->type->size;
         return new_node_num(size);
@@ -307,18 +324,28 @@ Node *postfix(Token **rest) {
     }
 }
 
-//primary        =   ident | string | "(" expr ")"
+/*primary        =   ident
+                 |   string
+                 | "(" expr ")"
+                 | "(" cmp_stmt ")"
+ */
 Node *primary(Token **rest) {
     Token *tok = *rest;
     Node *ret;
     if (consume("(",rest)) {
-        ret = expr(rest);
+        if (equal("{", rest)) {
+            ret = cmp_stmt(rest);
+        } else {
+            ret = expr(rest);
+        }
         expect(")",rest);
     } else if(tok->kind == TK_STR) {
         *rest = tok->next;
-        Var *p = lookup(tok->str, strings);
-        if(p == NULL) error("string literal error");
-        ret = new_node_str(p);
+        // 記号表への登録
+        // 同じ文字列の場合も別の文字列として出力する
+        Var *q = install(new_unique_name(), &strings, CONST, array(CharType, tok->len + 1));
+        q->name = tok->str;
+        ret = new_node_str(q);
     } else if (tok->kind == TK_IDENT) {
         Var *var = lookup(tok->str, identifiers);
         if (var == NULL) {
@@ -345,14 +372,14 @@ Node *arg_list(Token **rest, int depth){
         head.next = expr(&tok); // 前のトークン
         Node *car = head.next;
         car->ireg = ++depth;
-        car->name = name;
+        if(car->name == NULL) car->name = name;
         return car;
     }
     expect(",", rest);
     Node *cdr = arg_list(rest, depth + 1);
     Node *car = expr(&tok); // 前のトークン
     car->ireg = depth + 1;
-    car->name = name;
+    if(car->name == NULL) car->name = name;
     cdr->next = car;
     if(depth) return car;
     return head.next;

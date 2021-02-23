@@ -97,7 +97,6 @@ Node *cmp_stmt(Token **rest) {
     consume("{", rest);
     enterscope();
     if (equal_tk(TK_TYPE, rest)) {
-        //decl_list(rest, 0);
         ex_decltn(rest);
     }
     if (equal("}", rest)) {
@@ -118,7 +117,7 @@ Node *cmp_stmt(Token **rest) {
 //                |   stmt_lst stmt
 Node *stmt_lst(Token **rest, Token *tok) {
     if (at_eof(tok) || !strncmp("}", tok->str, 1)) return NULL;
-    if (tok->kind == TK_TYPE) ex_decltn(rest); //decl_list(rest, 0);
+    if (tok->kind == TK_TYPE) ex_decltn(rest);
     Node *car = stmt(rest);
     Node *cdr = stmt_lst(rest, *rest);
     if(cdr != NULL) car->next = cdr;

@@ -285,7 +285,6 @@ extern void *ltov(List **list);
 extern int list_length(List *list);
 // アセンブリの出力
 // codegen.c
-void gen(Node *node);
 void codegen(Code *prog);
 
 // エラーメッセージ(汎用)出力

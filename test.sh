@@ -33,7 +33,6 @@ assert() {
     exit 1
   fi
 }
-
 assert 0 'int main(){ return 0; }'
 assert 42 'int main(){ return 42; }'
 assert 21 'int main(){ return 5+20-4; }'
@@ -361,6 +360,10 @@ assert 1 'int main() { return sizeof(""); }'
 assert 4 'int main() { return sizeof("abc"); }'
 assert 4 'int main() { return sizeof("abc"); }'
 
+# handle scope
+assert 2 'int main() { int x; x=2; { int x; x=3; } return x; }'
+assert 2 'int main() { int x; x=2; { int x; x=3; } { int y; y=4; return x; }}'
+assert 3 'int main() { int x; x=2; { x=3; } return x; }'
 <<SKIP
 # segmentation faultが出るため後で調査
 assert 3 '

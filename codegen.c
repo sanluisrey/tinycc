@@ -51,6 +51,10 @@ static void store(Type *type) {
     printf("    mov [rdi], rax\n");
 }
 
+static void gen_lval(Node *node);
+static void gen(Node *node);
+static void gen_stmt(Node *node);
+
 // 式を左辺値として計算する。
 // ノードが変数を指す場合、変数のアドレスを計算し、スタックにプッシュする。
 // それ以外の場合、エラーを表示する。
@@ -70,7 +74,7 @@ void gen_lval(Node *node){
             return;
             
         case ND_STR:
-            printf("    lea rax, [rip+.LC%d]\n", node->offset);
+            printf("    lea rax, [rip+%s]\n", node->name);
             return;
     }
     error("左辺値ではありません。");
@@ -122,6 +126,9 @@ void gen(Node *node){
         }
         case ND_NULL:
             return;
+        case ND_BLOCK:
+            gen_stmt(node);
+            return;
     }
     gen(node->right); //rdi
     push();
@@ -167,7 +174,7 @@ void gen(Node *node){
     error("不正な式です。");
 }
 
-static void gen_stmt(Node *node) {
+void gen_stmt(Node *node) {
     switch (node->kind) {
         case ND_RETURN:
             gen(node->right);
@@ -270,12 +277,29 @@ void glblgen(Var *globals) {
     printf(".zero %d\n", size);
 }
 // TODO 長い文字列対応
-void gen_const_str() {
+void gen_const_str0() {
     Var *p = strings->entry;
     if (p) {
         do {
             printf(".LC%d:\n", p->offset);
             printf("    .string \"%s\"\n", p->str);
+        } while ((p = p->next) != NULL);
+    }
+}
+
+void gen_const_str() {
+    Var *p = strings->entry;
+    if (p) {
+        printf(".data\n");
+        do {
+            char *c = p->name;
+            int len = p->type->size;
+            printf(".global %s\n", p->str);
+            printf("%s:\n", p->str);
+            for (int i = 0; i < len - 1; i++) {
+                printf("    .byte %d\n", c[i]);
+            }
+            printf("    .byte %d\n", 0);
         } while ((p = p->next) != NULL);
     }
 }
@@ -289,21 +313,23 @@ void codegen(Code *prog) {
         // (TODO) グローバル変数のコード生成
         glblgen(func->globals);
         // 関数のコード生成
-        printf(".global %s\n", func->name);
-        printf(".text\n");
-        printf("%s:\n", func->name);
-        printf("    mov rax, rbp\n");
-        push();
-        printf("    mov rbp, rsp\n");
-        
-        for (int j = 0; j < func->nparams; j++) {
-            int index = func->nparams - j - 1;
+        if (func->name) {
+            printf(".global %s\n", func->name);
+            printf(".text\n");
+            printf("%s:\n", func->name);
             printf("    mov rax, rbp\n");
-            printf("    sub rax, %d\n", (index + 1)*8);
-            printf("    mov [rax], %s\n", MREGS[index]);
+            push();
+            printf("    mov rbp, rsp\n");
+            
+            for (int j = 0; j < func->nparams; j++) {
+                int index = func->nparams - j - 1;
+                printf("    mov rax, rbp\n");
+                printf("    sub rax, %d\n", (index + 1)*8);
+                printf("    mov [rax], %s\n", MREGS[index]);
+            }
+            // TODO ローカル変数領域の確保
+            printf("    sub rsp, %d\n", func->stack_size);
         }
-        // TODO ローカル変数領域の確保
-        printf("    sub rsp, %d\n", func->stack_size);
         
         // コードの本体部分の出力
         label = func->name;
@@ -311,9 +337,11 @@ void codegen(Code *prog) {
             gen_stmt(body);
         }
         //エピローグ
-        printf(".%s.return:\n", label);
-        printf("    mov rsp, rbp\n");
-        pop("rbp");
-        printf("    ret\n");
+        if (func->name) {
+            printf(".%s.return:\n", label);
+            printf("    mov rsp, rbp\n");
+            pop("rbp");
+            printf("    ret\n");
+        }
     }
 }
